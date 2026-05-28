@@ -1,7 +1,7 @@
 import { bdclient, type DiscoverResultItem } from '@brightdata/sdk';
 import {
   addBreach, addRelationship, addProspect,
-  getOrCreateCompany, getOrCreateVendor, getSeedCompanies, getStore,
+  getOrCreateCompany, getOrCreateVendor, getTargetAccounts, getStore, getProfile,
 } from './server-store';
 import type { Breach, Severity, BreachType } from './types';
 
@@ -65,22 +65,25 @@ export interface ScanProgressCallback {
   (stage: string, detail: string): void;
 }
 
-export async function detectBreaches(onProgress?: ScanProgressCallback): Promise<Breach[]> {
+export async function scanForBreachRelevance(onProgress?: ScanProgressCallback): Promise<Breach[]> {
   const c = getClient();
+  const profile = getProfile();
+  const targets = getTargetAccounts();
   const breaches: Breach[] = [];
 
-  const queries = [
-    'data breach 2026 security incident',
-    'cybersecurity breach disclosure recent',
-    'ransomware attack company 2026',
-  ];
+  onProgress?.('detect', `scanning for breaches relevant to ${profile.companyName}'s ${targets.length} target accounts...`);
 
-  onProgress?.('detect', 'scanning for recent security breaches...');
+  const targetNames = targets.slice(0, 6).map(t => t.name);
+  const queries = [
+    `data breach 2026 ${targetNames.slice(0, 3).join(' OR ')}`,
+    `cybersecurity incident ${targetNames.slice(3, 6).join(' OR ')}`,
+    'data breach security incident company 2026',
+  ];
 
   for (const query of queries) {
     try {
       const result = await c.discover(query, {
-        intent: 'security breach disclosures and cyber incidents affecting companies',
+        intent: `security breaches and cyber incidents affecting companies, especially relevant to ${profile.industry} vendors`,
         includeContent: false,
         numResults: 10,
       });
@@ -118,7 +121,67 @@ export async function detectBreaches(onProgress?: ScanProgressCallback): Promise
       }
       if (breaches.length >= 3) break;
     } catch (err) {
-      console.error('detectBreaches query failed:', err);
+      console.error('scanForBreachRelevance query failed:', err);
+    }
+  }
+
+  if (breaches.length === 0) {
+    onProgress?.('detect', 'no direct target breaches found — scanning vendor ecosystem...');
+    return scanVendorEcosystem(onProgress);
+  }
+
+  return breaches;
+}
+
+async function scanVendorEcosystem(onProgress?: ScanProgressCallback): Promise<Breach[]> {
+  const c = getClient();
+  const targets = getTargetAccounts();
+  const breaches: Breach[] = [];
+
+  for (const target of targets.slice(0, 3)) {
+    try {
+      onProgress?.('detect', `scanning ${target.name} vendor exposure...`);
+
+      const result = await c.discover(`${target.name} data breach security incident vulnerability`, {
+        intent: 'security incidents or data breaches affecting this company or its vendors',
+        includeContent: false,
+        numResults: 5,
+      });
+
+      if (!result.success || !result.data) continue;
+
+      for (const item of result.data) {
+        if (item.relevance_score < 0.35) continue;
+        const companyName = extractCompanyNameFromResult(item);
+        if (!companyName) continue;
+
+        const existingBreach = Array.from(getStore().breaches.values()).find(
+          b => b.companyName.toLowerCase() === companyName.toLowerCase()
+        );
+        if (existingBreach) continue;
+        if (breaches.length >= 2) break;
+
+        const company = getOrCreateCompany(companyName, `${companyName.toLowerCase().replace(/\s+/g, '')}.com`, 'Technology');
+
+        const breach: Breach = {
+          id: generateBreachId(),
+          title: item.title.length > 80 ? item.title.slice(0, 77) + '...' : item.title,
+          description: item.description.length > 200 ? item.description.slice(0, 197) + '...' : item.description,
+          severity: classifySeverity(item.description, item.title),
+          breachType: classifyBreachType(item.description, item.title),
+          detectedAt: new Date().toISOString(),
+          companyId: company.id,
+          companyName: company.name,
+          mappedNodesCount: 0,
+        };
+
+        addBreach(breach);
+        breaches.push(breach);
+        onProgress?.('detect', `found breach: ${companyName} (vendor to ${target.name})`);
+      }
+      if (breaches.length >= 2) break;
+    } catch (err) {
+      console.error(`vendor scan for ${target.name} failed:`, err);
     }
   }
 
@@ -136,6 +199,7 @@ export async function mapVendorNetwork(breach: Breach, onProgress?: ScanProgress
     const privacyResult = await c.scrapeUrl(`https://${companyDomain}/privacy`, {
       dataFormat: 'markdown',
       format: 'json',
+      timeout: 15000,
     });
 
     if (privacyResult && typeof privacyResult === 'object' && 'body' in privacyResult) {
@@ -157,9 +221,9 @@ export async function mapVendorNetwork(breach: Breach, onProgress?: ScanProgress
   }
 
   try {
-    onProgress?.('map', `searching for ${breach.companyName} tech stack via job postings...`);
-    const jobsResult = await c.discover(`site:linkedin.com/jobs ${breach.companyName} engineer`, {
-      intent: 'job postings that reveal technology stack and vendor usage',
+    onProgress?.('map', `searching for ${breach.companyName} tech stack...`);
+    const jobsResult = await c.discover(`${breach.companyName} engineer technology stack`, {
+      intent: 'job postings and tech stack information revealing vendor dependencies',
       includeContent: false,
       numResults: 5,
     });
@@ -174,44 +238,11 @@ export async function mapVendorNetwork(breach: Breach, onProgress?: ScanProgress
           confidence: 0.7,
           discoveredFrom: 'job_posting',
         });
-        onProgress?.('map', `found vendor: ${tech} (via job posting)`);
+        onProgress?.('map', `found vendor: ${tech} (via tech stack)`);
       }
     }
   } catch (err) {
-    console.error(`job search failed for ${breach.companyName}:`, err);
-  }
-
-  try {
-    onProgress?.('map', `searching for ${breach.companyName} vendor partnerships...`);
-    const partnerResult = await c.discover(`${breach.companyName} partnership vendor integration uses`, {
-      intent: 'publicly disclosed vendor relationships and technology partnerships',
-      includeContent: false,
-      numResults: 5,
-    });
-
-    if (partnerResult.success && partnerResult.data) {
-      for (const item of partnerResult.data) {
-        if (item.relevance_score < 0.4) continue;
-        const vendors = extractVendorNamesFromText(`${item.title} ${item.description}`);
-        for (const vName of vendors) {
-          const vendor = getOrCreateVendor(vName, 'Partner');
-          const existing = getStore().relationships.find(
-            r => r.sourceCompanyId === breach.companyId && r.targetVendorId === vendor.id
-          );
-          if (!existing) {
-            addRelationship({
-              sourceCompanyId: breach.companyId,
-              targetVendorId: vendor.id,
-              confidence: 0.6,
-              discoveredFrom: 'partnership_search',
-            });
-            onProgress?.('map', `found vendor: ${vName} (via partnership)`);
-          }
-        }
-      }
-    }
-  } catch (err) {
-    console.error(`partnership search failed for ${breach.companyName}:`, err);
+    console.error(`tech stack search failed for ${breach.companyName}:`, err);
   }
 }
 
@@ -220,35 +251,35 @@ export async function findCompaniesUsingVendor(vendorId: string, onProgress?: Sc
   const vendor = getStore().vendors.get(vendorId);
   if (!vendor) return;
 
+  const targets = getTargetAccounts();
   onProgress?.('trace', `tracing blast radius through ${vendor.name}...`);
 
   try {
-    const result = await c.discover(`companies using ${vendor.name} customers case study`, {
-      intent: 'companies that use or integrate with this vendor',
+    const result = await c.discover(`companies using ${vendor.name} customers clients`, {
+      intent: 'companies that use or integrate with this vendor, especially enterprise customers',
       includeContent: false,
       numResults: 8,
     });
 
     if (!result.success || !result.data) return;
 
-    const seedCompanies = getSeedCompanies();
-
     for (const item of result.data) {
       if (item.relevance_score < 0.3) continue;
-      for (const seed of seedCompanies) {
-        const match = `${item.title} ${item.description}`.toLowerCase().includes(seed.name.toLowerCase());
+
+      for (const target of targets) {
+        const match = `${item.title} ${item.description}`.toLowerCase().includes(target.name.toLowerCase());
         if (match) {
           const existing = getStore().relationships.find(
-            r => r.sourceCompanyId === seed.id && r.targetVendorId === vendorId
+            r => r.sourceCompanyId === target.id && r.targetVendorId === vendorId
           );
           if (!existing) {
             addRelationship({
-              sourceCompanyId: seed.id,
+              sourceCompanyId: target.id,
               targetVendorId: vendorId,
               confidence: 0.65,
               discoveredFrom: 'vendor_customer_search',
             });
-            onProgress?.('trace', `${seed.name} uses ${vendor.name}`);
+            onProgress?.('trace', `${target.name} uses ${vendor.name} — in your target list`);
           }
         }
       }
@@ -332,14 +363,14 @@ export async function identifyProspects(breachId: string, onProgress?: ScanProgr
   if (!breach) return;
 
   const vendorRels = getStore().relationships.filter(r => r.sourceCompanyId === breach.companyId);
-  const seedCompanies = getSeedCompanies();
+  const targets = getTargetAccounts();
 
-  onProgress?.('prospect', 'identifying prospects in blast zones...');
+  onProgress?.('prospect', 'cross-referencing blast zone with your target accounts...');
 
-  for (const seed of seedCompanies) {
-    const seedVendors = getStore().relationships.filter(r => r.sourceCompanyId === seed.id);
+  for (const target of targets) {
+    const targetVendors = getStore().relationships.filter(r => r.sourceCompanyId === target.id);
     const sharedVendors = vendorRels.filter(vr =>
-      seedVendors.some(sv => sv.targetVendorId === vr.targetVendorId)
+      targetVendors.some(sv => sv.targetVendorId === vr.targetVendorId)
     );
 
     if (sharedVendors.length === 0) continue;
@@ -357,20 +388,20 @@ export async function identifyProspects(breachId: string, onProgress?: ScanProgr
 
     addProspect({
       id: `pr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      companyId: seed.id,
-      companyName: seed.name,
-      industry: seed.industry,
+      companyId: target.id,
+      companyName: target.name,
+      industry: target.industry,
       priority,
       relevanceScore: Math.round(relevanceScore * 100) / 100,
       connectionPath: [
         { type: 'COMPANY', name: breach.companyName },
         { type: 'VENDOR', name: vendor.name },
-        { type: 'PROSPECT', name: seed.name },
+        { type: 'PROSPECT', name: target.name },
       ],
       breachId,
       targetVendorId: vendor.id,
     });
 
-    onProgress?.('prospect', `${seed.name} in blast zone via ${vendor.name}`);
+    onProgress?.('prospect', `${target.name} in blast zone via ${vendor.name}`);
   }
 }

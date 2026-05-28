@@ -24,10 +24,50 @@ export async function getGraphData(breachId: string) {
   return res.json();
 }
 
-export async function initiateScan(): Promise<ReadableStream<Uint8Array>> {
-  const res = await fetch('/api/scan', { method: 'POST' });
-  if (!res.ok) throw new Error('Failed to initiate scan');
-  return res.body!;
+export async function getProfile() {
+  const res = await fetch('/api/profile');
+  if (!res.ok) throw new Error('Failed to fetch profile');
+  return res.json();
+}
+
+export async function scanInit() {
+  const res = await fetch('/api/scan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ step: 'init' }),
+  });
+  if (!res.ok) throw new Error('Scan init failed');
+  return res.json();
+}
+
+export async function scanDetect() {
+  const res = await fetch('/api/scan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ step: 'detect' }),
+  });
+  if (!res.ok) throw new Error('Scan detect failed');
+  return res.json();
+}
+
+export async function scanMap(breachId: string) {
+  const res = await fetch('/api/scan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ step: 'map', breachId }),
+  });
+  if (!res.ok) throw new Error('Scan map failed');
+  return res.json();
+}
+
+export async function scanComplete() {
+  const res = await fetch('/api/scan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ step: 'complete' }),
+  });
+  if (!res.ok) throw new Error('Scan complete failed');
+  return res.json();
 }
 
 export async function generateOutreach(prospectId: string, tone: string): Promise<{ subject: string; body: string }> {

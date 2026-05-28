@@ -1,5 +1,12 @@
 import type { Breach, Company, Vendor, VendorRelationship, Prospect, OutreachMessage } from './types';
 
+export interface UserProfile {
+  userId: string;
+  companyName: string;
+  industry: string;
+  domain: string;
+}
+
 interface ScanResult {
   id: string;
   startedAt: string;
@@ -11,6 +18,7 @@ interface ScanResult {
 }
 
 interface Store {
+  profile: UserProfile | null;
   breaches: Map<string, Breach>;
   companies: Map<string, Company>;
   vendors: Map<string, Vendor>;
@@ -22,6 +30,7 @@ interface Store {
 }
 
 const store: Store = {
+  profile: null,
   breaches: new Map(),
   companies: new Map(),
   vendors: new Map(),
@@ -32,25 +41,62 @@ const store: Store = {
   lastScanAt: null,
 };
 
-const SEED_COMPANIES: Company[] = [
-  { id: 'seed-001', name: 'Stripe', domain: 'stripe.com', industry: 'Fintech' },
-  { id: 'seed-002', name: 'Shopify', domain: 'shopify.com', industry: 'E-Commerce' },
-  { id: 'seed-003', name: 'Slack', domain: 'slack.com', industry: 'SaaS' },
-  { id: 'seed-004', name: 'Datadog', domain: 'datadoghq.com', industry: 'Observability' },
-  { id: 'seed-005', name: 'Snowflake', domain: 'snowflake.com', industry: 'Data Warehouse' },
-  { id: 'seed-006', name: 'CrowdStrike', domain: 'crowdstrike.com', industry: 'Cybersecurity' },
-  { id: 'seed-007', name: 'Twilio', domain: 'twilio.com', industry: 'Communications' },
-  { id: 'seed-008', name: 'Okta', domain: 'okta.com', industry: 'Identity' },
-  { id: 'seed-009', name: 'Atlassian', domain: 'atlassian.com', industry: 'Collaboration' },
-  { id: 'seed-010', name: 'Salesforce', domain: 'salesforce.com', industry: 'CRM' },
-  { id: 'seed-011', name: 'HubSpot', domain: 'hubspot.com', industry: 'Marketing' },
-  { id: 'seed-012', name: 'PagerDuty', domain: 'pagerduty.com', industry: 'Incident Management' },
+const DEFAULT_PROSPECTS: Company[] = [
+  { id: 't-001', name: 'Stripe', domain: 'stripe.com', industry: 'Fintech' },
+  { id: 't-002', name: 'Shopify', domain: 'shopify.com', industry: 'E-Commerce' },
+  { id: 't-003', name: 'Slack', domain: 'slack.com', industry: 'SaaS' },
+  { id: 't-004', name: 'Datadog', domain: 'datadoghq.com', industry: 'Observability' },
+  { id: 't-005', name: 'Snowflake', domain: 'snowflake.com', industry: 'Data Warehouse' },
+  { id: 't-006', name: 'CrowdStrike', domain: 'crowdstrike.com', industry: 'Cybersecurity' },
+  { id: 't-007', name: 'Twilio', domain: 'twilio.com', industry: 'Communications' },
+  { id: 't-008', name: 'Okta', domain: 'okta.com', industry: 'Identity' },
+  { id: 't-009', name: 'Atlassian', domain: 'atlassian.com', industry: 'Collaboration' },
+  { id: 't-010', name: 'Salesforce', domain: 'salesforce.com', industry: 'CRM' },
+  { id: 't-011', name: 'HubSpot', domain: 'hubspot.com', industry: 'Marketing' },
+  { id: 't-012', name: 'PagerDuty', domain: 'pagerduty.com', industry: 'Incident Management' },
 ];
 
-SEED_COMPANIES.forEach(c => store.companies.set(c.id, c));
+const DEFAULT_PROFILE: UserProfile = {
+  userId: '1',
+  companyName: 'SentinelShield',
+  industry: 'Cybersecurity',
+  domain: 'sentinelshield.io',
+};
+
+store.profile = DEFAULT_PROFILE;
+DEFAULT_PROSPECTS.forEach(c => store.companies.set(c.id, c));
 
 export function getStore() {
   return store;
+}
+
+export function getProfile(): UserProfile {
+  if (!store.profile) {
+    store.profile = DEFAULT_PROFILE;
+  }
+  return store.profile;
+}
+
+export function updateProfile(profile: Partial<UserProfile>) {
+  store.profile = { ...getProfile(), ...profile };
+}
+
+export function getTargetAccounts(): Company[] {
+  return DEFAULT_PROSPECTS;
+}
+
+export function addTargetAccount(company: Company) {
+  const existing = Array.from(store.companies.values()).find(c => c.name.toLowerCase() === company.name.toLowerCase());
+  if (!existing) {
+    store.companies.set(company.id, company);
+    DEFAULT_PROSPECTS.push(company);
+  }
+}
+
+export function removeTargetAccount(companyId: string) {
+  const idx = DEFAULT_PROSPECTS.findIndex(c => c.id === companyId);
+  if (idx >= 0) DEFAULT_PROSPECTS.splice(idx, 1);
+  store.prospects = store.prospects.filter(p => p.companyId !== companyId);
 }
 
 export function addBreach(breach: Breach) {
@@ -96,10 +142,6 @@ export function getOrCreateVendor(name: string, category: string): Vendor {
   const vendor: Vendor = { id: `vn-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, name, category };
   store.vendors.set(vendor.id, vendor);
   return vendor;
-}
-
-export function getSeedCompanies(): Company[] {
-  return SEED_COMPANIES;
 }
 
 export function startScan(): ScanResult {
@@ -168,6 +210,16 @@ export function getProspectById(id: string): Prospect | undefined {
 
 export function getOutreachForProspect(prospectId: string): OutreachMessage | undefined {
   return store.outreach.find(m => m.prospectId === prospectId);
+}
+
+export function resetStore() {
+  store.breaches.clear();
+  store.vendors.clear();
+  store.relationships = [];
+  store.prospects = [];
+  store.outreach = [];
+  store.scans = [];
+  store.lastScanAt = null;
 }
 
 export function getGraphData(breachId: string) {

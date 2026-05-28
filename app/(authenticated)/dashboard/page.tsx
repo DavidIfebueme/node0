@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { getBreaches, initiateScan } from '@/lib/api';
+import { getBreaches, scanInit, scanDetect, scanMap, scanComplete, getProfile } from '@/lib/api';
 import { BreachCard } from '@/components/radar/breach-card';
 import { MonospaceStat } from '@/components/ui/monospace-stat';
 import { TerminalButton } from '@/components/ui/terminal-button';
@@ -13,53 +13,61 @@ import type { Breach } from '@/lib/types';
 export default function Dashboard() {
   const [filter, setFilter] = useState('all');
   const [breaches, setBreaches] = useState<Breach[]>([]);
-  const [scanMessages, setScanMessages] = useState<string[]>([]);
+  const [profile, setProfile] = useState<{ companyName: string; industry: string; targetCount: number } | null>(null);
+  const [scanLog, setScanLog] = useState<string[]>([]);
   const { isScanning, setScanning, scanProgress, setScanProgress } = useStore();
 
   useEffect(() => {
     getBreaches().then(setBreaches).catch(console.error);
+    getProfile().then(setProfile).catch(console.error);
   }, []);
 
   const handleScan = useCallback(async () => {
     if (isScanning) return;
     setScanning(true);
-    setScanProgress(0);
-    setScanMessages([]);
+    setScanProgress(5);
+    setScanLog([]);
+
+    const log = (msg: string) => setScanLog(prev => [...prev.slice(-15), msg]);
 
     try {
-      const stream = await initiateScan();
-      const reader = stream.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
+      log('initializing scan...');
+      const init = await scanInit();
+      log(`scan initialized for ${init.profile?.companyName || 'your org'} — monitoring ${init.targetCount} targets`);
+      setScanProgress(10);
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      log('detecting breaches across your vendor ecosystem...');
+      setScanProgress(20);
+      const detectResult = await scanDetect();
+      const detectedBreaches: Breach[] = detectResult.breaches || [];
+      log(`detected ${detectedBreaches.length} breaches`);
+      setScanProgress(35);
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+      for (let i = 0; i < detectedBreaches.length; i++) {
+        const breach = detectedBreaches[i];
+        const progress = 35 + (i / detectedBreaches.length) * 50;
+        setScanProgress(progress);
 
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          try {
-            const data = JSON.parse(line.slice(6));
-            if (data.progress > 0) setScanProgress(Math.min(data.progress, 100));
-            if (data.detail) {
-              setScanMessages(prev => [...prev.slice(-20), data.detail]);
-            }
-            if (data.stage === 'complete' || data.stage === 'error') {
-              const updated = await getBreaches();
-              setBreaches(updated);
-            }
-          } catch {}
-        }
+        log(`mapping ${breach.companyName} vendor network...`);
+        const mapResult = await scanMap(breach.id);
+        log(`${breach.companyName}: ${mapResult.vendors} vendors, ${mapResult.prospects} prospects in blast zone`);
       }
+
+      log('finalizing scan results...');
+      setScanProgress(90);
+      await scanComplete();
+
+      const updated = await getBreaches();
+      setBreaches(updated);
+      const updatedProfile = await getProfile();
+      setProfile(updatedProfile);
+      setScanProgress(100);
+      log(`scan complete — ${updated.length} breaches, ${updated.reduce((sum, b) => sum + b.mappedNodesCount, 0)} nodes mapped`);
     } catch (err) {
+      log(`error: ${err instanceof Error ? err.message : 'scan failed'}`);
       console.error('scan failed:', err);
     } finally {
       setScanning(false);
-      setScanProgress(100);
     }
   }, [isScanning, setScanning, setScanProgress]);
 
@@ -76,11 +84,12 @@ export default function Dashboard() {
         <span className="text-border-muted">│</span>
         <MonospaceStat label="active traces" value={breaches.filter(b => b.severity === 'CRITICAL' || b.severity === 'HIGH').length} />
         <span className="text-border-muted">│</span>
-        <MonospaceStat label="prospects in blast zone" value={scanMessages.filter(m => m.includes('blast zone')).length || '—'} />
+        <MonospaceStat label="targets monitored" value={profile?.targetCount || 0} />
         <span className="text-border-muted">│</span>
         <div className="flex items-center gap-2">
-          <span>last scan:</span>
-          <span className="text-text-primary">{isScanning ? 'running...' : breaches.length > 0 ? 'completed' : 'not yet'}</span>
+          <span>scanning for:</span>
+          <span className="text-accent-cyan">{profile?.companyName || '...'}</span>
+          <span className="text-text-dim">({profile?.industry || '...'})</span>
         </div>
       </div>
 
@@ -100,9 +109,9 @@ export default function Dashboard() {
           )}
         </div>
 
-        {isScanning && scanMessages.length > 0 && (
+        {isScanning && scanLog.length > 0 && (
           <div className="px-4 py-2 border-b border-border-muted bg-accent-cyan/5 text-xs font-mono text-accent-cyan max-h-32 overflow-y-auto">
-            {scanMessages.map((msg, i) => (
+            {scanLog.map((msg, i) => (
               <div key={i} className="py-0.5">▸ {msg}</div>
             ))}
           </div>

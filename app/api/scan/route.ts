@@ -1,81 +1,77 @@
-import { NextRequest } from 'next/server';
-import { detectBreaches, mapVendorNetwork, findCompaniesUsingVendor, identifyProspects } from '@/lib/brightdata';
-import { getStore, startScan, completeScan } from '@/lib/server-store';
+import { NextRequest, NextResponse } from 'next/server';
+import { scanForBreachRelevance, mapVendorNetwork, findCompaniesUsingVendor, identifyProspects } from '@/lib/brightdata';
+import { getStore, startScan, completeScan, resetStore, getProfile, getTargetAccounts } from '@/lib/server-store';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
-  const scan = startScan();
+  const { step } = await req.json();
 
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      const send = (stage: string, detail: string, progress: number) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ stage, detail, progress })}\n\n`));
-      };
+  if (step === 'init') {
+    resetStore();
+    const scan = startScan();
+    const profile = getProfile();
+    const targets = getTargetAccounts();
+    return NextResponse.json({
+      scanId: scan.id,
+      profile: { companyName: profile.companyName, industry: profile.industry },
+      targetCount: targets.length,
+    });
+  }
 
-      try {
-        send('init', 'initializing scan...', 5);
+  if (step === 'detect') {
+    try {
+      const breaches = await scanForBreachRelevance();
+      return NextResponse.json({ breaches });
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : 'detect failed' }, { status: 500 });
+    }
+  }
 
-        const breaches = await detectBreaches((stage, detail) => {
-          send(stage, detail, 15);
-        });
+  if (step === 'map') {
+    const { breachId } = await req.json();
+    const breach = getStore().breaches.get(breachId);
+    if (!breach) return NextResponse.json({ error: 'breach not found' }, { status: 404 });
 
-        send('detect', `found ${breaches.length} breaches`, 25);
+    try {
+      await mapVendorNetwork(breach);
 
-        for (let i = 0; i < breaches.length; i++) {
-          const breach = breaches[i];
-          const baseProgress = 25 + (i / Math.max(breaches.length, 1)) * 40;
+      const vendorRels = getStore().relationships.filter(r => r.sourceCompanyId === breach.companyId);
+      const uniqueVendorIds = [...new Set(vendorRels.map(r => r.targetVendorId))];
 
-          await mapVendorNetwork(breach, (stage, detail) => {
-            send(stage, detail, baseProgress + 5);
-          });
-
-          const vendorRels = getStore().relationships.filter(r => r.sourceCompanyId === breach.companyId);
-          const uniqueVendorIds = [...new Set(vendorRels.map(r => r.targetVendorId))];
-
-          for (const vendorId of uniqueVendorIds) {
-            await findCompaniesUsingVendor(vendorId, (stage, detail) => {
-              send(stage, detail, baseProgress + 15);
-            });
-          }
-
-          await identifyProspects(breach.id, (stage, detail) => {
-            send(stage, detail, baseProgress + 25);
-          });
-
-          const mappedNodes = getStore().relationships.filter(r => r.sourceCompanyId === breach.companyId).length;
-          const storedBreach = getStore().breaches.get(breach.id);
-          if (storedBreach) storedBreach.mappedNodesCount = mappedNodes;
-        }
-
-        const finalStore = getStore();
-        const totalProspects = finalStore.prospects.length;
-        const totalVendors = finalStore.vendors.size;
-
-        completeScan(scan.id, {
-          breachesFound: breaches.length,
-          vendorsMapped: totalVendors,
-          prospectsIdentified: totalProspects,
-        });
-
-        send('complete', `scan complete: ${breaches.length} breaches, ${totalVendors} vendors, ${totalProspects} prospects`, 100);
-      } catch (err) {
-        console.error('scan error:', err);
-        send('error', err instanceof Error ? err.message : 'scan failed', -1);
-        completeScan(scan.id, { status: 'failed' });
-      } finally {
-        controller.close();
+      for (const vendorId of uniqueVendorIds) {
+        await findCompaniesUsingVendor(vendorId);
       }
-    },
-  });
 
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    },
-  });
+      await identifyProspects(breachId);
+
+      const mappedNodes = getStore().relationships.filter(r => r.sourceCompanyId === breach.companyId).length;
+      const storedBreach = getStore().breaches.get(breachId);
+      if (storedBreach) storedBreach.mappedNodesCount = mappedNodes;
+
+      const vendors = getStore().vendors.size;
+      const prospects = getStore().prospects.filter(p => p.breachId === breachId).length;
+
+      return NextResponse.json({ mappedNodes, vendors, prospects });
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : 'map failed' }, { status: 500 });
+    }
+  }
+
+  if (step === 'complete') {
+    const breaches = getStore().breaches.size;
+    const vendors = getStore().vendors.size;
+    const prospects = getStore().prospects.length;
+
+    completeScan('latest', {
+      breachesFound: breaches,
+      vendorsMapped: vendors,
+      prospectsIdentified: prospects,
+    });
+
+    return NextResponse.json({ breaches, vendors, prospects });
+  }
+
+  return NextResponse.json({ error: 'unknown step' }, { status: 400 });
 }

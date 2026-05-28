@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getProfile, getTargetAccounts, addTargetAccount } from '@/lib/server-store';
+import { getProfile, getTargetAccounts, addTargetAccount, updateProfile } from '@/lib/server-store';
 import type { Company } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -12,6 +12,10 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
+
+  if (body.updateProfile) {
+    updateProfile(body.updateProfile);
+  }
 
   if (body.addTarget) {
     const target: Company = body.addTarget;

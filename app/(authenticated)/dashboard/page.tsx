@@ -92,17 +92,24 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] p-4 md:p-8 max-w-7xl mx-auto w-full gap-4">
-      <div className="flex flex-wrap items-center gap-4 text-sm text-text-secondary border-b border-border-default pb-4">
-        <MonospaceStat label="breaches detected" value={breaches.length} />
-        <span className="text-border-muted">│</span>
-        <MonospaceStat label="active traces" value={breaches.filter(b => b.severity === 'CRITICAL' || b.severity === 'HIGH').length} />
-        <span className="text-border-muted">│</span>
-        <MonospaceStat label="prospects in blast zone" value={prospects.length} />
-        <span className="text-border-muted">│</span>
-        <div className="flex items-center gap-2">
-          <span>targets:</span>
-          <span className="text-accent-cyan">{targetCount}</span>
-          <span className="text-text-dim">companies</span>
+      <div className="flex flex-col gap-2 border-b border-border-default pb-4">
+        {breaches.length === 0 && !isScanning && (
+          <div className="text-xs text-text-dim bg-bg-surface border border-border-default p-3">
+            <span className="text-accent-cyan">node0</span> monitors for breaches, maps which vendors are shared with your target accounts, and generates outreach so you can sell security to exposed companies. hit scan to start.
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-4 text-sm text-text-secondary">
+          <MonospaceStat label="breaches detected" value={breaches.length} />
+          <span className="text-border-muted">│</span>
+          <MonospaceStat label="active traces" value={breaches.filter(b => b.severity === 'CRITICAL' || b.severity === 'HIGH').length} />
+          <span className="text-border-muted">│</span>
+          <MonospaceStat label="prospects in blast zone" value={prospects.length} />
+          <span className="text-border-muted">│</span>
+          <div className="flex items-center gap-2">
+            <span>targets:</span>
+            <span className="text-accent-cyan">{targetCount}</span>
+            <span className="text-text-dim">companies</span>
+          </div>
         </div>
       </div>
 

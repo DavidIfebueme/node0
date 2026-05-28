@@ -7,6 +7,7 @@ interface NodeStore {
   breaches: Breach[];
   prospects: Prospect[];
   lastScanAt: string | null;
+  savedOutreach: Record<string, { subject: string; body: string }>;
   setScanning: (status: boolean) => void;
   setScanProgress: (progress: number) => void;
   setBreaches: (breaches: Breach[]) => void;
@@ -14,6 +15,7 @@ interface NodeStore {
   setLastScanAt: (time: string) => void;
   addBreach: (breach: Breach) => void;
   addProspects: (prospects: Prospect[]) => void;
+  saveOutreach: (key: string, content: { subject: string; body: string }) => void;
 }
 
 export const useStore = create<NodeStore>((set) => ({
@@ -22,6 +24,7 @@ export const useStore = create<NodeStore>((set) => ({
   breaches: [],
   prospects: [],
   lastScanAt: null,
+  savedOutreach: {},
   setScanning: (status) => set({ isScanning: status }),
   setScanProgress: (progress) => set({ scanProgress: progress }),
   setBreaches: (breaches) => set({ breaches }),
@@ -33,4 +36,7 @@ export const useStore = create<NodeStore>((set) => ({
     const unique = newProspects.filter(p => !existingIds.has(p.id));
     return { prospects: [...state.prospects, ...unique] };
   }),
+  saveOutreach: (key, content) => set((state) => ({
+    savedOutreach: { ...state.savedOutreach, [key]: content },
+  })),
 }));

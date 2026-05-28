@@ -13,14 +13,6 @@ export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const getNavPath = () => {
-    if (pathname === '/') return 'radar';
-    if (pathname.startsWith('/map')) return 'map / trace';
-    if (pathname === '/actions') return 'actions';
-    if (pathname === '/settings') return 'settings';
-    return 'unknown';
-  };
-
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -34,7 +26,6 @@ export function Header() {
   const navLinks = [
     { href: '/dashboard', label: '[ radar ]', active: pathname === '/dashboard' },
     { href: '/actions', label: '[ actions ]', active: pathname === '/actions' },
-    { href: '/settings', label: '[ settings ]', active: pathname === '/settings' },
   ];
 
   return (
@@ -71,6 +62,13 @@ export function Header() {
               {link.label}
             </Link>
           ))}
+          <Link
+            href="/settings"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block px-6 py-3 text-sm text-text-secondary hover:bg-bg-elevated transition-colors"
+          >
+            [ settings ]
+          </Link>
         </div>
       )}
 
@@ -89,10 +87,17 @@ export function Header() {
             </span>
           </button>
           {menuOpen && (
-            <div className="absolute right-0 top-8 bg-bg-surface border border-border-default w-36 z-50">
+            <div className="absolute right-0 top-8 bg-bg-surface border border-border-default w-44 z-50">
               <div className="px-3 py-2 border-b border-border-muted text-xs text-text-dim truncate">
                 {session?.user?.email || 'operator'}
               </div>
+              <Link
+                href="/settings"
+                onClick={() => setMenuOpen(false)}
+                className="block px-3 py-2 text-xs text-text-secondary hover:bg-bg-elevated hover:text-accent-cyan transition-colors"
+              >
+                [ settings ]
+              </Link>
               <button
                 onClick={() => { setMenuOpen(false); signOut({ callbackUrl: '/' }); }}
                 className="w-full text-left px-3 py-2 text-xs text-text-secondary hover:bg-bg-elevated hover:text-accent-red transition-colors"

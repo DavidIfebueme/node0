@@ -4,24 +4,32 @@ import React, { useState } from 'react';
 import { generateOutreach } from '@/lib/api';
 import { useStore } from '@/lib/store';
 import { TerminalButton } from '@/components/ui/terminal-button';
-import { Send, FileText, Sparkles, Loader2 } from 'lucide-react';
+import { Send, FileText, Sparkles, Loader2, Check, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ToneSelector } from '@/components/actions/tone-selector';
 
+type Tone = 'professional' | 'urgent' | 'casual';
+
 export default function ActionsPage() {
-  const { prospects, breaches } = useStore();
+  const { prospects, breaches, savedOutreach, saveOutreach } = useStore();
   const [selectedProspectId, setSelectedProspectId] = useState<string | null>(null);
   const selectedProspect = prospects.find(p => p.id === selectedProspectId) || prospects[0] || null;
-  const [tone, setTone] = useState<'professional' | 'urgent' | 'casual'>('professional');
-  const [generatedEmail, setGeneratedEmail] = useState<{ subject: string; body: string } | null>(null);
+  const [tone, setTone] = useState<Tone>('professional');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  const handleGenerate = async () => {
+  const cacheKey = selectedProspect ? `${selectedProspect.id}-${tone}` : '';
+  const cached = cacheKey ? savedOutreach[cacheKey] : null;
+
+  const handleGenerate = async (overrideTone?: Tone) => {
     if (!selectedProspect) return;
+    const t = overrideTone || tone;
+    const key = `${selectedProspect.id}-${t}`;
+    if (savedOutreach[key]) return;
+
     setIsGenerating(true);
     setError(null);
-    setGeneratedEmail(null);
 
     try {
       const breach = breaches.find(b => b.id === selectedProspect.breachId);
@@ -38,8 +46,8 @@ export default function ActionsPage() {
         prospectCompany: selectedProspect.companyName,
         prospectIndustry: selectedProspect.industry,
         connectionPath,
-      }, tone);
-      setGeneratedEmail(result);
+      }, t);
+      saveOutreach(key, result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'generation failed');
     } finally {
@@ -47,9 +55,25 @@ export default function ActionsPage() {
     }
   };
 
+  const handleGenerateAllTones = async () => {
+    if (!selectedProspect) return;
+    for (const t of (['professional', 'urgent', 'casual'] as Tone[])) {
+      const key = `${selectedProspect.id}-${t}`;
+      if (!savedOutreach[key]) {
+        await handleGenerate(t);
+      }
+    }
+  };
+
+  const handleCopy = () => {
+    if (!cached) return;
+    navigator.clipboard.writeText(`Subject: ${cached.subject}\n\n${cached.body}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const handleSelectProspect = (id: string) => {
     setSelectedProspectId(id);
-    setGeneratedEmail(null);
     setError(null);
   };
 
@@ -125,16 +149,16 @@ export default function ActionsPage() {
             </div>
           </div>
 
-          <ToneSelector tone={tone} onChange={(t) => { setTone(t); setGeneratedEmail(null); setError(null); }} />
+          <ToneSelector tone={tone} onChange={(t) => { setTone(t); setError(null); }} />
 
           <TerminalButton
-            onClick={handleGenerate}
+            onClick={() => handleGenerateAllTones()}
             disabled={isGenerating}
             variant="primary"
             className="w-full"
           >
             {isGenerating ? (
-              <><Loader2 size={14} className="animate-spin" /> generating...</>
+              <><Loader2 size={14} className="animate-spin" /> generating all tones...</>
             ) : (
               <><Sparkles size={14} /> generate outreach</>
             )}
@@ -147,28 +171,26 @@ export default function ActionsPage() {
           )}
 
           <div className="flex-1 bg-bg-primary border border-border-muted p-4 overflow-y-auto min-h-[120px]">
-            {generatedEmail ? (
+            {cached ? (
               <div className="text-sm text-text-primary font-mono leading-relaxed whitespace-pre-wrap">
-                <div className="text-accent-cyan text-xs mb-2">subject: {generatedEmail.subject}</div>
+                <div className="text-accent-cyan text-xs mb-2">subject: {cached.subject}</div>
                 <div className="border-b border-border-muted mb-2" />
-                {generatedEmail.body}
+                {cached.body}
               </div>
             ) : (
               <div className="text-text-dim text-xs">
-                {isGenerating ? 'generating with ai...' : 'click "generate outreach" to create a personalized message'}
+                {isGenerating ? 'generating with ai...' : 'click "generate outreach" to create personalized messages for all tones'}
               </div>
             )}
           </div>
 
-          {generatedEmail && (
+          {cached && (
             <div className="flex items-center justify-between gap-4 mt-auto">
-              <div className="flex gap-2">
-                <TerminalButton variant="ghost" className="px-2">
-                  <FileText size={14} /> save
-                </TerminalButton>
-              </div>
-              <TerminalButton variant="primary" className="flex-1">
-                <Send size={14} /> send via integration
+              <TerminalButton onClick={handleCopy} variant="ghost" className="px-2">
+                {copied ? <><Check size={14} className="text-accent-green" /> copied</> : <><Copy size={14} /> copy</>}
+              </TerminalButton>
+              <TerminalButton onClick={handleCopy} variant="primary" className="flex-1">
+                <Send size={14} /> copy & send
               </TerminalButton>
             </div>
           )}

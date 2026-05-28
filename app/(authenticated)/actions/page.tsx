@@ -1,39 +1,30 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { getProspects, generateOutreach } from '@/lib/api';
+import React, { useState } from 'react';
+import { generateOutreach } from '@/lib/api';
+import { useStore } from '@/lib/store';
 import { TerminalButton } from '@/components/ui/terminal-button';
 import { Send, FileText, Sparkles, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ToneSelector } from '@/components/actions/tone-selector';
-import type { Prospect } from '@/lib/types';
 
 export default function ActionsPage() {
-  const [prospects, setProspects] = useState<Prospect[]>([]);
+  const { prospects } = useStore();
   const [selectedProspectId, setSelectedProspectId] = useState<string | null>(null);
-  const selectedProspect = prospects.find(p => p.id === selectedProspectId);
+  const selectedProspect = prospects.find(p => p.id === selectedProspectId) || prospects[0] || null;
   const [tone, setTone] = useState<'professional' | 'urgent' | 'casual'>('professional');
   const [generatedEmail, setGeneratedEmail] = useState<{ subject: string; body: string } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    getProspects().then(p => {
-      setProspects(p);
-      if (p.length > 0 && !selectedProspectId) {
-        setSelectedProspectId(p[0].id);
-      }
-    }).catch(console.error);
-  }, []);
-
   const handleGenerate = async () => {
-    if (!selectedProspectId) return;
+    if (!selectedProspect) return;
     setIsGenerating(true);
     setError(null);
     setGeneratedEmail(null);
 
     try {
-      const result = await generateOutreach(selectedProspectId, tone);
+      const result = await generateOutreach(selectedProspect.id, tone);
       setGeneratedEmail(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'generation failed');
@@ -42,10 +33,11 @@ export default function ActionsPage() {
     }
   };
 
-  useEffect(() => {
+  const handleSelectProspect = (id: string) => {
+    setSelectedProspectId(id);
     setGeneratedEmail(null);
     setError(null);
-  }, [selectedProspectId, tone]);
+  };
 
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-4rem)] border-t border-border-default w-full p-4 md:p-6 gap-6 max-w-[1600px] mx-auto">
@@ -72,10 +64,10 @@ export default function ActionsPage() {
               {prospects.map(prospect => (
                 <div
                   key={prospect.id}
-                  onClick={() => setSelectedProspectId(prospect.id)}
+                  onClick={() => handleSelectProspect(prospect.id)}
                   className={cn(
                     "flex items-center border-b border-border-muted cursor-pointer hover:bg-bg-elevated transition-colors text-sm",
-                    selectedProspectId === prospect.id && "bg-bg-elevated border-l-2 border-l-accent-cyan"
+                    (selectedProspect?.id === prospect.id) && "bg-bg-elevated border-l-2 border-l-accent-cyan"
                   )}
                 >
                   <div className="py-4 px-2 flex-1">
@@ -119,7 +111,7 @@ export default function ActionsPage() {
             </div>
           </div>
 
-          <ToneSelector tone={tone} onChange={setTone} />
+          <ToneSelector tone={tone} onChange={(t) => { setTone(t); setGeneratedEmail(null); setError(null); }} />
 
           <TerminalButton
             onClick={handleGenerate}

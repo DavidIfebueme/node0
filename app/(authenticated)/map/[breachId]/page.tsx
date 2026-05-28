@@ -1,41 +1,27 @@
 'use client';
 
 import React, { use, useEffect, useState } from 'react';
-import { getBreachById, getGraphData } from '@/lib/api';
+import { useStore } from '@/lib/store';
+import { getGraphData } from '@/lib/api';
 import { GlitchText } from '@/components/ui/glitch-text';
 import { TerminalButton } from '@/components/ui/terminal-button';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import '@xyflow/react/dist/style.css';
 import { NetworkGraph } from '@/components/graph/network-graph';
-import type { Breach, Prospect } from '@/lib/types';
+import type { Breach } from '@/lib/types';
 
 export default function MapPage(props: { params: Promise<{ breachId: string }> }) {
   const params = use(props.params);
   const breachId = params.breachId;
-  const [breach, setBreach] = useState<Breach | null>(null);
-  const [affectedProspects, setAffectedProspects] = useState<Prospect[]>([]);
-  const [graphData, setGraphData] = useState<any>(null);
-
-  useEffect(() => {
-    getBreachById(breachId).then(b => {
-      if (b) setBreach(b);
-    });
-    getGraphData(breachId).then(data => {
-      setGraphData(data);
-    });
-    fetch(`/api/breaches/${breachId}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.prospects) setAffectedProspects(data.prospects);
-      })
-      .catch(() => {});
-  }, [breachId]);
+  const { breaches, prospects } = useStore();
+  const breach = breaches.find(b => b.id === breachId) || null;
+  const affectedProspects = prospects.filter(p => p.breachId === breachId);
 
   if (!breach) {
     return (
       <div className="flex items-center justify-center h-screen text-text-dim text-sm">
-        loading breach data...
+        breach not found — run a scan from the dashboard first
       </div>
     );
   }
@@ -99,7 +85,7 @@ export default function MapPage(props: { params: Promise<{ breachId: string }> }
           <div className="text-xs text-text-dim mb-4">//// targeted prospects</div>
           <div className="flex flex-col gap-3">
             {affectedProspects.length === 0 ? (
-              <div className="text-text-dim text-xs">no prospects mapped yet</div>
+              <div className="text-text-dim text-xs">no prospects mapped for this breach</div>
             ) : (
               affectedProspects.map(prospect => (
                 <div key={prospect.id} className="p-3 border border-border-default bg-bg-primary/50 hover:border-accent-cyan/50 cursor-pointer group transition-colors">

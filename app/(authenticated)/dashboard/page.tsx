@@ -1,26 +1,18 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { getBreaches, scanInit, scanDetect, scanMap, scanComplete, getProfile } from '@/lib/api';
+import React, { useState, useCallback } from 'react';
 import { BreachCard } from '@/components/radar/breach-card';
 import { MonospaceStat } from '@/components/ui/monospace-stat';
 import { TerminalButton } from '@/components/ui/terminal-button';
 import { useStore } from '@/lib/store';
 import { Search } from 'lucide-react';
 import { ScanProgress } from '@/components/radar/scan-progress';
-import type { Breach } from '@/lib/types';
+import type { Breach, Prospect } from '@/lib/types';
 
 export default function Dashboard() {
   const [filter, setFilter] = useState('all');
-  const [breaches, setBreaches] = useState<Breach[]>([]);
-  const [profile, setProfile] = useState<{ companyName: string; industry: string; targetCount: number } | null>(null);
   const [scanLog, setScanLog] = useState<string[]>([]);
-  const { isScanning, setScanning, scanProgress, setScanProgress } = useStore();
-
-  useEffect(() => {
-    getBreaches().then(setBreaches).catch(console.error);
-    getProfile().then(setProfile).catch(console.error);
-  }, []);
+  const { isScanning, setScanning, scanProgress, setScanProgress, breaches, prospects, setBreaches, setProspects, setLastScanAt } = useStore();
 
   const handleScan = useCallback(async () => {
     if (isScanning) return;
@@ -32,50 +24,67 @@ export default function Dashboard() {
 
     try {
       log('initializing scan...');
-      const init = await scanInit();
-      log(`scan initialized for ${init.profile?.companyName || 'your org'} — monitoring ${init.targetCount} targets`);
-      setScanProgress(10);
+      const res = await fetch('/api/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ step: 'full' }),
+      });
 
-      log('detecting breaches across your vendor ecosystem...');
-      setScanProgress(20);
-      const detectResult = await scanDetect();
-      const detectedBreaches: Breach[] = detectResult.breaches || [];
-      log(`detected ${detectedBreaches.length} breaches`);
-      setScanProgress(35);
+      if (!res.ok || !res.body) throw new Error('scan request failed');
 
-      for (let i = 0; i < detectedBreaches.length; i++) {
-        const breach = detectedBreaches[i];
-        const progress = 35 + (i / detectedBreaches.length) * 50;
-        setScanProgress(progress);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let currentEvent = '';
 
-        log(`mapping ${breach.companyName} vendor network...`);
-        const mapResult = await scanMap(breach.id);
-        log(`${breach.companyName}: ${mapResult.vendors} vendors, ${mapResult.prospects} prospects in blast zone`);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (currentEvent === 'progress') {
+                if (data.progress > 0) setScanProgress(Math.min(data.progress, 100));
+                if (data.message) log(data.message);
+              } else if (currentEvent === 'breaches') {
+                if (data.breaches) setBreaches(data.breaches as Breach[]);
+              } else if (currentEvent === 'prospects') {
+                if (data.prospects) setProspects(data.prospects as Prospect[]);
+              } else if (currentEvent === 'error') {
+                log(`error: ${data.message}`);
+              }
+            } catch {}
+          }
+        }
       }
 
-      log('finalizing scan results...');
-      setScanProgress(90);
-      await scanComplete();
-
-      const updated = await getBreaches();
-      setBreaches(updated);
-      const updatedProfile = await getProfile();
-      setProfile(updatedProfile);
       setScanProgress(100);
-      log(`scan complete — ${updated.length} breaches, ${updated.reduce((sum, b) => sum + b.mappedNodesCount, 0)} nodes mapped`);
+      setLastScanAt(new Date().toISOString());
+      log('scan complete');
     } catch (err) {
       log(`error: ${err instanceof Error ? err.message : 'scan failed'}`);
       console.error('scan failed:', err);
     } finally {
       setScanning(false);
     }
-  }, [isScanning, setScanning, setScanProgress]);
+  }, [isScanning, setScanning, setScanProgress, setBreaches, setProspects, setLastScanAt]);
 
   const filteredBreaches = breaches.filter(b => {
     if (filter === 'critical') return b.severity === 'CRITICAL';
     if (filter === 'high') return b.severity === 'HIGH' || b.severity === 'CRITICAL';
     return true;
   });
+
+  const targetCount = 12;
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] p-4 md:p-8 max-w-7xl mx-auto w-full gap-4">
@@ -84,12 +93,12 @@ export default function Dashboard() {
         <span className="text-border-muted">│</span>
         <MonospaceStat label="active traces" value={breaches.filter(b => b.severity === 'CRITICAL' || b.severity === 'HIGH').length} />
         <span className="text-border-muted">│</span>
-        <MonospaceStat label="targets monitored" value={profile?.targetCount || 0} />
+        <MonospaceStat label="prospects in blast zone" value={prospects.length} />
         <span className="text-border-muted">│</span>
         <div className="flex items-center gap-2">
-          <span>scanning for:</span>
-          <span className="text-accent-cyan">{profile?.companyName || '...'}</span>
-          <span className="text-text-dim">({profile?.industry || '...'})</span>
+          <span>targets:</span>
+          <span className="text-accent-cyan">{targetCount}</span>
+          <span className="text-text-dim">companies</span>
         </div>
       </div>
 

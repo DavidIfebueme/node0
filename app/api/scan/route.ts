@@ -74,5 +74,96 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ breaches, vendors, prospects });
   }
 
+  if (step === 'full') {
+    resetStore();
+    startScan();
+
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const send = (event: string, data: Record<string, unknown>) => {
+          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        };
+
+        try {
+          const profile = getProfile();
+          const targets = getTargetAccounts();
+          send('progress', { message: `scanning for breaches affecting ${profile.companyName}'s ${targets.length} targets...`, progress: 5 });
+
+          const breaches = await scanForBreachRelevance((stage, detail) => {
+            send('progress', { message: detail, progress: 15 });
+          });
+
+          send('progress', { message: `found ${breaches.length} breaches`, progress: 25 });
+
+          const allBreaches: Record<string, unknown>[] = [];
+
+          for (let i = 0; i < breaches.length; i++) {
+            const breach = breaches[i];
+            const baseProgress = 25 + (i / Math.max(breaches.length, 1)) * 60;
+
+            send('progress', { message: `mapping ${breach.companyName} vendor network...`, progress: baseProgress + 5 });
+
+            await mapVendorNetwork(breach, (stage, detail) => {
+              send('progress', { message: detail, progress: baseProgress + 10 });
+            });
+
+            const vendorRels = getStore().relationships.filter(r => r.sourceCompanyId === breach.companyId);
+            const uniqueVendorIds = [...new Set(vendorRels.map(r => r.targetVendorId))];
+
+            for (const vendorId of uniqueVendorIds) {
+              await findCompaniesUsingVendor(vendorId, (stage, detail) => {
+                send('progress', { message: detail, progress: baseProgress + 20 });
+              });
+            }
+
+            await identifyProspects(breach.id, (stage, detail) => {
+              send('progress', { message: detail, progress: baseProgress + 25 });
+            });
+
+            const mappedNodes = getStore().relationships.filter(r => r.sourceCompanyId === breach.companyId).length;
+            const storedBreach = getStore().breaches.get(breach.id);
+            if (storedBreach) storedBreach.mappedNodesCount = mappedNodes;
+
+            allBreaches.push({
+              id: breach.id,
+              title: breach.title,
+              companyName: breach.companyName,
+              severity: breach.severity,
+              breachType: breach.breachType,
+              mappedNodesCount: mappedNodes,
+            });
+          }
+
+          const finalStore = getStore();
+          const totalProspects = finalStore.prospects.length;
+          const totalVendors = finalStore.vendors.size;
+
+          completeScan('latest', {
+            breachesFound: breaches.length,
+            vendorsMapped: totalVendors,
+            prospectsIdentified: totalProspects,
+          });
+
+          send('breaches', { breaches: allBreaches });
+          send('prospects', { prospects: finalStore.prospects });
+          send('progress', { message: `scan complete — ${breaches.length} breaches, ${totalVendors} vendors, ${totalProspects} prospects`, progress: 100 });
+        } catch (err) {
+          send('error', { message: err instanceof Error ? err.message : 'scan failed' });
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
+  }
+
   return NextResponse.json({ error: 'unknown step' }, { status: 400 });
 }

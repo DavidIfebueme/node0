@@ -1,15 +1,20 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { ReactFlow, Controls, Background, useNodesState, useEdgesState, BackgroundVariant, addEdge, BaseEdge, getBezierPath } from '@xyflow/react';
-import { MOCK_BREACHES, getMockGraphData } from '@/lib/mock-data';
+import { ReactFlow, Controls, Background, useNodesState, useEdgesState, BackgroundVariant } from '@xyflow/react';
+import { getMockGraphData } from '@/lib/mock-data';
 import { OriginNode, VendorNode, AffectedNode, ProspectNode } from './custom-nodes';
+import { AnimatedEdge } from './custom-edges';
 
 const nodeTypes = {
   origin: OriginNode,
   vendor: VendorNode,
   affected: AffectedNode,
   prospect: ProspectNode,
+};
+
+const edgeTypes = {
+  animated: AnimatedEdge,
 };
 
 export function NetworkGraph({ breachId }: { breachId: string }) {
@@ -19,17 +24,30 @@ export function NetworkGraph({ breachId }: { breachId: string }) {
 
   useEffect(() => {
     let timeoutIds: NodeJS.Timeout[] = [];
-    
+
     timeoutIds.push(setTimeout(() => {
-      setEdges(initialData.edges.filter(e => e.target.startsWith('v')));
+      setEdges(initialData.edges
+        .filter(e => e.target.startsWith('v'))
+        .map(e => ({ ...e, type: 'animated' }))
+      );
     }, 1000));
-    
+
     timeoutIds.push(setTimeout(() => {
-      setEdges(prev => [...prev, ...initialData.edges.filter(e => e.target.startsWith('a'))]);
+      setEdges(prev => [
+        ...prev,
+        ...initialData.edges
+          .filter(e => e.target.startsWith('a'))
+          .map(e => ({ ...e, type: 'animated' }))
+      ]);
     }, 2000));
-    
+
     timeoutIds.push(setTimeout(() => {
-      setEdges(prev => [...prev, ...initialData.edges.filter(e => e.target.startsWith('p'))]);
+      setEdges(prev => [
+        ...prev,
+        ...initialData.edges
+          .filter(e => e.target.startsWith('p'))
+          .map(e => ({ ...e, type: 'animated' }))
+      ]);
     }, 3000));
 
     return () => timeoutIds.forEach(clearTimeout);
@@ -42,6 +60,7 @@ export function NetworkGraph({ breachId }: { breachId: string }) {
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
       fitView
       fitViewOptions={{ padding: 0.5, minZoom: 0.5, maxZoom: 1.5 }}
       minZoom={0.2}

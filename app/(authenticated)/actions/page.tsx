@@ -3,9 +3,9 @@
 import React, { useState } from 'react';
 import { MOCK_PROSPECTS } from '@/lib/mock-data';
 import { TerminalButton } from '@/components/ui/terminal-button';
-import { Send, FileText, Check, ChevronDown, Sparkles } from 'lucide-react';
-import { GlitchText } from '@/components/ui/glitch-text';
+import { Send, FileText, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ToneSelector } from '@/components/actions/tone-selector';
 
 export default function ActionsPage() {
   const [selectedProspectId, setSelectedProspectId] = useState(MOCK_PROSPECTS[0]?.id);
@@ -28,53 +28,47 @@ export default function ActionsPage() {
         </div>
         
         <div className="flex-1 overflow-auto hide-scrollbar">
-          <table className="w-full text-left text-sm border-collapse">
-            <thead>
-              <tr className="border-b border-border-muted text-text-secondary">
-                <th className="py-3 px-2 font-normal">company</th>
-                <th className="py-3 px-2 font-normal">industry</th>
-                <th className="py-3 px-2 font-normal">relevance</th>
-                <th className="py-3 px-2 font-normal">connections</th>
-              </tr>
-            </thead>
-            <tbody>
-              {MOCK_PROSPECTS.map(prospect => (
-                <tr 
-                  key={prospect.id} 
-                  onClick={() => setSelectedProspectId(prospect.id)}
-                  className={cn(
-                    "border-b border-border-muted cursor-pointer hover:bg-bg-elevated transition-colors",
-                    selectedProspectId === prospect.id && "bg-bg-elevated border-l-2 border-l-accent-cyan"
-                  )}
-                >
-                  <td className="py-4 px-2">
-                    <div className="font-bold text-text-primary">{prospect.companyName}</div>
-                    <div className="text-[10px] text-text-dim">[{prospect.priority}]</div>
-                  </td>
-                  <td className="py-4 px-2 text-text-secondary">{prospect.industry}</td>
-                  <td className="py-4 px-2">
-                    <div className="flex items-center gap-2">
-                      <div className="text-accent-cyan">{Math.round(prospect.relevanceScore * 100)}%</div>
-                      <div className="w-16 h-1 bg-bg-primary">
-                        <div className="h-full bg-accent-cyan" style={{ width: `${prospect.relevanceScore * 100}%` }} />
-                      </div>
+          <div className="min-w-[500px]">
+            <div className="flex text-left text-sm border-b border-border-muted text-text-secondary">
+              <div className="py-3 px-2 font-normal flex-1">company</div>
+              <div className="py-3 px-2 font-normal w-24">industry</div>
+              <div className="py-3 px-2 font-normal w-28">relevance</div>
+              <div className="py-3 px-2 font-normal flex-1">connections</div>
+            </div>
+            {MOCK_PROSPECTS.map(prospect => (
+              <div
+                key={prospect.id}
+                onClick={() => setSelectedProspectId(prospect.id)}
+                className={cn(
+                  "flex items-center border-b border-border-muted cursor-pointer hover:bg-bg-elevated transition-colors text-sm",
+                  selectedProspectId === prospect.id && "bg-bg-elevated border-l-2 border-l-accent-cyan"
+                )}
+              >
+                <div className="py-4 px-2 flex-1">
+                  <div className="font-bold text-text-primary">{prospect.companyName}</div>
+                  <div className="text-[10px] text-text-dim">[{prospect.priority}]</div>
+                </div>
+                <div className="py-4 px-2 w-24 text-text-secondary">{prospect.industry}</div>
+                <div className="py-4 px-2 w-28">
+                  <div className="flex items-center gap-2">
+                    <div className="text-accent-cyan">{Math.round(prospect.relevanceScore * 100)}%</div>
+                    <div className="w-16 h-1 bg-bg-primary">
+                      <div className="h-full bg-accent-cyan" style={{ width: `${prospect.relevanceScore * 100}%` }} />
                     </div>
-                  </td>
-                  <td className="py-4 px-2 text-xs text-text-dim">
-                    <div className="flex items-center gap-1">
-                      <span className="text-text-secondary">{prospect.connectionPath[0].name}</span> → 
-                      <span className="text-text-primary">{prospect.connectionPath[1].name}</span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                </div>
+                <div className="py-4 px-2 flex-1 text-xs text-text-dim">
+                  <span className="text-text-secondary">{prospect.connectionPath[0].name}</span> →
+                  <span className="text-text-primary">{prospect.connectionPath[1].name}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
       {selectedProspect ? (
-        <div className="w-full md:w-2/5 flex flex-col gap-4 overflow-hidden border border-border-default bg-[#0a0a0f] p-4 flex-shrink-0">
+        <div className="w-full md:w-2/5 flex flex-col gap-4 overflow-hidden border border-border-default bg-[#0a0a0f] p-4 flex-shrink-0 max-h-[50vh] md:max-h-none">
           <div className="text-xs text-text-dim flex justify-between items-center border-b border-border-muted pb-4">
             <span>//// compose outreach</span>
             <span className="flex items-center gap-1 text-accent-cyan"><Sparkles size={12}/> context-aware</span>
@@ -90,20 +84,10 @@ export default function ActionsPage() {
             </div>
           </div>
 
-          <div className="flex gap-1 bg-bg-surface p-1 border border-border-muted text-xs">
-            {['professional', 'urgent', 'casual'].map(t => (
-              <button 
-                key={t}
-                onClick={() => setTone(t as any)}
-                className={cn("flex-1 py-1.5 text-center transition-colors", tone === t ? "bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/30" : "text-text-secondary hover:text-text-primary")}
-              >
-                [{t}]
-              </button>
-            ))}
-          </div>
+          <ToneSelector tone={tone} onChange={setTone} />
 
-          <div className="flex-1 bg-bg-primary border border-border-muted p-4 overflow-y-auto">
-            <textarea 
+          <div className="flex-1 bg-bg-primary border border-border-muted p-4 overflow-y-auto min-h-[120px]">
+            <textarea
               className="w-full h-full bg-transparent resize-none outline-none text-sm text-text-primary font-mono leading-relaxed hide-scrollbar"
               value={generatedEmail?.[tone]}
               readOnly

@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 import { JetBrains_Mono } from 'next/font/google';
 import './globals.css';
-import { AmbientBackground } from '@/components/layout/ambient-background';
-import { Header } from '@/components/layout/header';
+import { Providers } from '@/components/providers';
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
@@ -23,11 +22,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${jetbrainsMono.variable}`}>
       <body className="bg-bg-primary text-text-primary font-mono antialiased selection:bg-accent-cyan selection:text-bg-primary overflow-x-hidden min-h-screen">
-        <AmbientBackground />
-        <Header />
-        <main className="pt-16 min-h-screen">
+        <Providers>
           {children}
-        </main>
+        </Providers>
       </body>
     </html>
   );

@@ -5,10 +5,9 @@ import { MOCK_BREACHES } from '@/lib/mock-data';
 import { BreachCard } from '@/components/radar/breach-card';
 import { MonospaceStat } from '@/components/ui/monospace-stat';
 import { TerminalButton } from '@/components/ui/terminal-button';
-import { formatDistanceToNow } from 'date-fns';
-import { Search } from 'lucide-react';
 import { useStore } from '@/lib/store';
-import { GlitchText } from '@/components/ui/glitch-text';
+import { Search } from 'lucide-react';
+import { ScanProgress } from '@/components/radar/scan-progress';
 
 export default function Dashboard() {
   const [filter, setFilter] = useState('all');
@@ -37,8 +36,7 @@ export default function Dashboard() {
   });
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] p-4 md:p-8 max-w-7xl mx-auto w-full gap-6">
-      
+    <div className="flex flex-col h-[calc(100vh-4rem)] p-4 md:p-8 max-w-7xl mx-auto w-full gap-4">
       <div className="flex flex-wrap items-center gap-4 text-sm text-text-secondary border-b border-border-default pb-4">
         <MonospaceStat label="breaches detected" value={MOCK_BREACHES.length} />
         <span className="text-border-muted">│</span>
@@ -52,8 +50,12 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto hide-scrollbar flex flex-col gap-3">
-        <div className="pb-2 text-xs text-text-dim">//// radar feed</div>
+      <div className="flex-1 overflow-y-auto hide-scrollbar border border-border-default bg-bg-surface">
+        <div className="px-4 py-2 border-b border-border-muted flex items-center gap-2 text-xs text-text-dim sticky top-0 bg-bg-surface z-10">
+          <span>//// radar feed</span>
+          <span className="text-accent-cyan">— live</span>
+          <span className="inline-block w-1.5 h-3 bg-accent-cyan animate-pulse ml-1" />
+        </div>
         {filteredBreaches.map((breach, idx) => (
           <BreachCard key={breach.id} breach={breach} index={idx} />
         ))}
@@ -62,27 +64,15 @@ export default function Dashboard() {
       <div className="mt-auto pt-4 border-t border-border-default flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-4 w-full md:w-auto">
           <TerminalButton onClick={handleScan} className="w-full md:w-auto">
-            <Search size={14} /> 
+            <Search size={14} />
             {isScanning ? 'abort scan' : '+ initiate scan'}
           </TerminalButton>
-          
-          {isScanning && (
-            <div className="flex-1 md:w-64 flex items-center gap-4 font-mono text-xs text-accent-cyan">
-              <GlitchText className="min-w-[80px]">scanning...</GlitchText>
-              <div className="flex-1 h-1 bg-border-default relative overflow-hidden">
-                <div 
-                  className="absolute top-0 left-0 bottom-0 bg-accent-cyan transition-all duration-300"
-                  style={{ width: `${scanProgress}%` }}
-                />
-              </div>
-              <span>{Math.min(scanProgress, 100)}%</span>
-            </div>
-          )}
+          <ScanProgress progress={scanProgress} isScanning={isScanning} />
         </div>
 
         <div className="flex items-center gap-2">
           {['all', 'critical', 'high', 'this week'].map((f) => (
-            <button 
+            <button
               key={f}
               onClick={() => setFilter(f)}
               className={`font-mono text-xs px-3 py-1 border transition-colors ${filter === f ? 'border-text-secondary text-text-primary bg-bg-elevated' : 'border-border-muted text-text-secondary hover:border-border-default'}`}

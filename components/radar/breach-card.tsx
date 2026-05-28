@@ -2,61 +2,54 @@
 
 import React from 'react';
 import { Breach } from '@/lib/types';
-import { SeverityBadge } from '../ui/severity-badge';
-import { TerminalButton } from '../ui/terminal-button';
+import { format } from 'date-fns';
 import { formatDistanceToNow } from 'date-fns';
 import { motion } from 'motion/react';
-import { ArrowRight, Network } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
+const SEVERITY_SYMBOL: Record<string, { symbol: string; color: string }> = {
+  CRITICAL: { symbol: '▲', color: 'text-accent-red' },
+  HIGH: { symbol: '◆', color: 'text-accent-orange' },
+  MEDIUM: { symbol: '●', color: 'text-yellow-400' },
+  LOW: { symbol: '○', color: 'text-text-dim' },
+};
+
 export function BreachCard({ breach, index }: { breach: Breach; index: number }) {
   const router = useRouter();
-  
-  const getSeverityStrip = (sev: string) => {
-    switch(sev) {
-      case 'CRITICAL': return 'bg-accent-red';
-      case 'HIGH': return 'bg-accent-orange';
-      case 'MEDIUM': return 'bg-yellow-400';
-      case 'LOW': return 'bg-text-secondary';
-      default: return 'bg-border-default';
-    }
-  };
+  const sev = SEVERITY_SYMBOL[breach.severity] || SEVERITY_SYMBOL.LOW;
+  const timestamp = format(new Date(breach.detectedAt), 'HH:mm:ss');
+  const timeAgo = formatDistanceToNow(new Date(breach.detectedAt));
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05, duration: 0.3 }}
-      className="group relative bg-bg-surface border border-border-default hover:border-accent-cyan/50 transition-colors duration-200 cursor-pointer overflow-hidden flex"
+      className="group cursor-pointer hover:bg-bg-elevated transition-colors duration-150 border-b border-border-muted px-4 py-3"
       onClick={() => router.push(`/map/${breach.id}`)}
     >
-      <div className={cn("w-[3px] shrink-0", getSeverityStrip(breach.severity))} />
-      
-      <div className="flex-1 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <span className="font-bold text-text-primary">{breach.companyName}</span>
-            <SeverityBadge severity={breach.severity} />
-            <span className="text-[10px] text-text-dim uppercase">[{breach.breachType}]</span>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 font-mono text-sm">
+            <span className="text-text-dim text-xs">[{timestamp}]</span>
+            <span className={cn('text-xs', sev.color)}>{sev.symbol}</span>
+            <span className="text-text-primary">{breach.companyName.toLowerCase().replace(/\s+/g, '_')}</span>
+            <span className="text-text-dim text-xs">// {breach.breachType.toLowerCase()} // {breach.severity.toLowerCase()}</span>
           </div>
-          <div className="text-sm text-text-secondary truncate max-w-xl">
-            {breach.description}
+          <div className="text-text-secondary text-sm mt-0.5 truncate max-w-xl pl-[72px]">
+            {breach.description.toLowerCase()}
+          </div>
+          <div className="flex items-center gap-2 text-text-dim text-xs mt-0.5 pl-[72px]">
+            <span>──</span>
+            <span>mapped {breach.mappedNodesCount} nodes</span>
+            <span>──</span>
+            <span>{timeAgo} ago</span>
           </div>
         </div>
-
-        <div className="flex items-center gap-6 text-sm">
-          <div className="flex flex-col items-end gap-1">
-            <span className="text-text-dim text-xs">detected {formatDistanceToNow(new Date(breach.detectedAt))} ago</span>
-            <div className="flex items-center gap-1.5 text-text-secondary">
-              <Network size={14} />
-              <span>└─ {breach.mappedNodesCount} nodes mapped</span>
-            </div>
-          </div>
-          <TerminalButton variant="ghost" className="opacity-0 group-hover:opacity-100 hidden md:flex">
-            trace <ArrowRight size={14} />
-          </TerminalButton>
-        </div>
+        <span className="text-accent-cyan text-xs opacity-0 group-hover:opacity-100 transition-opacity shrink-0 pt-1">
+          → trace
+        </span>
       </div>
     </motion.div>
   );

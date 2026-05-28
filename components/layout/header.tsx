@@ -1,14 +1,18 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useSession, signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
-import { GlitchText } from '@/components/ui/glitch-text';
 
 export function Header() {
   const pathname = usePathname();
-  
+  const { data: session } = useSession();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
   const getNavPath = () => {
     if (pathname === '/') return 'radar';
     if (pathname.startsWith('/map')) return 'map / trace';
@@ -17,6 +21,22 @@ export function Header() {
     return 'unknown';
   };
 
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const navLinks = [
+    { href: '/', label: '[ radar ]', active: pathname === '/' },
+    { href: '/actions', label: '[ actions ]', active: pathname === '/actions' },
+    { href: '/settings', label: '[ settings ]', active: pathname === '/settings' },
+  ];
+
   return (
     <header className="fixed top-0 left-0 right-0 z-50 h-16 border-b border-border-default bg-bg-primary/80 backdrop-blur-md flex items-center justify-between px-6">
       <div className="flex items-center gap-8">
@@ -24,21 +44,63 @@ export function Header() {
           node<span className="text-accent-red custom-pulse-red">0</span>
         </Link>
         <nav className="hidden md:flex items-center gap-4 text-sm text-text-secondary">
-          <Link href="/" className={cn("hover:text-text-primary transition-colors", pathname === '/' && "text-accent-cyan")}>[ radar ]</Link>
-          <span className="text-text-dim">↑</span>
-          <Link href="/actions" className={cn("hover:text-text-primary transition-colors", pathname === '/actions' && "text-accent-cyan")}>[ actions ]</Link>
-          <span className="text-text-dim">↑</span>
-          <Link href="/settings" className={cn("hover:text-text-primary transition-colors", pathname === '/settings' && "text-accent-cyan")}>[ settings ]</Link>
+          {navLinks.map((link, i) => (
+            <React.Fragment key={link.href}>
+              {i > 0 && <span className="text-text-dim">↑</span>}
+              <Link href={link.href} className={cn("hover:text-text-primary transition-colors", link.active && "text-accent-cyan")}>{link.label}</Link>
+            </React.Fragment>
+          ))}
         </nav>
+        <button
+          className="md:hidden text-text-secondary hover:text-text-primary text-sm"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        >
+          [≡]
+        </button>
       </div>
+
+      {mobileMenuOpen && (
+        <div className="absolute top-16 left-0 right-0 bg-bg-surface border-b border-border-default md:hidden z-50">
+          {navLinks.map(link => (
+            <Link
+              key={link.href}
+              href={link.href}
+              onClick={() => setMobileMenuOpen(false)}
+              className={cn("block px-6 py-3 text-sm hover:bg-bg-elevated transition-colors", link.active && "text-accent-cyan")}
+            >
+              {link.label}
+            </Link>
+          ))}
+        </div>
+      )}
 
       <div className="flex items-center gap-4">
         <div className="hidden md:flex items-center gap-2 text-xs text-text-secondary">
           <span className="w-2 h-2 rounded-full bg-accent-green" />
           <span>bright_data_connected</span>
         </div>
-        <div className="w-6 h-6 border border-border-default rounded-full bg-bg-surface flex items-center justify-center">
-          <span className="text-xs text-text-secondary">u</span>
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="w-6 h-6 border border-border-default rounded-full bg-bg-surface flex items-center justify-center hover:border-accent-cyan transition-colors"
+          >
+            <span className="text-xs text-text-secondary">
+              {session?.user?.name?.[0]?.toLowerCase() || 'u'}
+            </span>
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 top-8 bg-bg-surface border border-border-default w-36 z-50">
+              <div className="px-3 py-2 border-b border-border-muted text-xs text-text-dim truncate">
+                {session?.user?.email || 'operator'}
+              </div>
+              <button
+                onClick={() => { setMenuOpen(false); signOut({ callbackUrl: '/landing' }); }}
+                className="w-full text-left px-3 py-2 text-xs text-text-secondary hover:bg-bg-elevated hover:text-accent-red transition-colors"
+              >
+                [logout]
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>

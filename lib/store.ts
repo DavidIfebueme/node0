@@ -12,6 +12,8 @@ interface NodeStore {
   setBreaches: (breaches: Breach[]) => void;
   setProspects: (prospects: Prospect[]) => void;
   setLastScanAt: (time: string) => void;
+  addBreach: (breach: Breach) => void;
+  addProspects: (prospects: Prospect[]) => void;
 }
 
 export const useStore = create<NodeStore>((set) => ({
@@ -25,4 +27,10 @@ export const useStore = create<NodeStore>((set) => ({
   setBreaches: (breaches) => set({ breaches }),
   setProspects: (prospects) => set({ prospects }),
   setLastScanAt: (time) => set({ lastScanAt: time }),
+  addBreach: (breach) => set((state) => ({ breaches: [...state.breaches, breach] })),
+  addProspects: (newProspects) => set((state) => {
+    const existingIds = new Set(state.prospects.map(p => p.id));
+    const unique = newProspects.filter(p => !existingIds.has(p.id));
+    return { prospects: [...state.prospects, ...unique] };
+  }),
 }));

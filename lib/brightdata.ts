@@ -41,7 +41,7 @@ function classifyBreachType(description: string, title: string): BreachType {
 }
 
 function extractCompanyNameFromResult(item: DiscoverResultItem): string | null {
-  const stopWords = new Set(['The','This','That','These','Those','Biggest','Largest','Major','Recent','New','Latest','April','May','June','July','August','September','October','November','December','January','February','March','Were','Was','Has','Have','Had','Are','Is','More','Over','About','How','Why','What','When','Where','Who','Which','Their','Our','Your','Millions','Thousands','Hundreds','Several','Multiple','Many','Some','All','Most','Other','Another','First','Last','Next','Former','After','Before','During','Following','According','Based','Data','Security','Cyber','Breached','Hacked','Attacked','Compromised','Forced','Reported','Confirmed','Companies','Must','Disclose','People','Users','Customers']);
+  const stopWords = new Set(['The','This','That','These','Those','Biggest','Largest','Major','Recent','New','Latest','April','May','June','July','August','September','October','November','December','January','February','March','Were','Was','Has','Have','Had','Are','Is','More','Over','About','How','Why','What','When','Where','Who','Which','Their','Our','Your','Millions','Thousands','Hundreds','Several','Multiple','Many','Some','All','Most','Other','Another','First','Last','Next','Former','After','Before','During','Following','According','Based','Data','Security','Cyber','Breached','Hacked','Attacked','Compromised','Forced','Reported','Confirmed','Companies','Must','Disclose','People','Users','Customers','Vendor','Firm','Company','Healthcare','Provider','Government','Agency','Organization','Third','Party','Supply','Chain']);
   const patterns = [
     /(?:breach at|attack on|hack of|incident at)\s+([A-Z][A-Za-z0-9]+(?:\s[A-Z][A-Za-z0-9]+){0,2})/i,
     /([A-Z][A-Za-z0-9]+(?:\s[A-Z][A-Za-z0-9]+)?)\s+(?:suffered|confirmed|reported|disclosed)\s+(?:a\s+)?(?:data\s+)?breach/i,
@@ -52,9 +52,9 @@ function extractCompanyNameFromResult(item: DiscoverResultItem): string | null {
     if (match) {
       const name = match[1].trim();
       const words = name.split(/\s+/);
-      if (words.every(w => stopWords.has(w))) continue;
-      if (words.length === 1 && stopWords.has(words[0])) continue;
+      if (words.some(w => stopWords.has(w))) continue;
       if (name.length < 3) continue;
+      if (/^[a-z]/.test(name)) continue;
       return name;
     }
   }
@@ -99,7 +99,7 @@ export async function scanForBreachRelevance(onProgress?: ScanProgressCallback):
           b => b.companyName.toLowerCase() === companyName.toLowerCase()
         );
         if (existingBreach) continue;
-        if (breaches.length >= 3) break;
+        if (breaches.length >= 2) break;
 
         const company = getOrCreateCompany(companyName, `${companyName.toLowerCase().replace(/\s+/g, '')}.com`, 'Technology');
 
@@ -138,7 +138,7 @@ async function scanVendorEcosystem(onProgress?: ScanProgressCallback): Promise<B
   const targets = getTargetAccounts();
   const breaches: Breach[] = [];
 
-  for (const target of targets.slice(0, 3)) {
+  for (const target of targets.slice(0, 2)) {
     try {
       onProgress?.('detect', `scanning ${target.name} vendor exposure...`);
 
@@ -159,7 +159,7 @@ async function scanVendorEcosystem(onProgress?: ScanProgressCallback): Promise<B
           b => b.companyName.toLowerCase() === companyName.toLowerCase()
         );
         if (existingBreach) continue;
-        if (breaches.length >= 2) break;
+        if (breaches.length >= 1) break;
 
         const company = getOrCreateCompany(companyName, `${companyName.toLowerCase().replace(/\s+/g, '')}.com`, 'Technology');
 
@@ -179,7 +179,7 @@ async function scanVendorEcosystem(onProgress?: ScanProgressCallback): Promise<B
         breaches.push(breach);
         onProgress?.('detect', `found breach: ${companyName} (vendor to ${target.name})`);
       }
-      if (breaches.length >= 2) break;
+      if (breaches.length >= 1) break;
     } catch (err) {
       console.error(`vendor scan for ${target.name} failed:`, err);
     }

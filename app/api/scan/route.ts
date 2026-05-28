@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
             });
 
             const vendorRels = getStore().relationships.filter(r => r.sourceCompanyId === breach.companyId);
-            const uniqueVendorIds = [...new Set(vendorRels.map(r => r.targetVendorId))];
+            const uniqueVendorIds = [...new Set(vendorRels.map(r => r.targetVendorId))].slice(0, 3);
 
             for (const vendorId of uniqueVendorIds) {
               await findCompaniesUsingVendor(vendorId, (stage, detail) => {
@@ -125,6 +125,8 @@ export async function POST(req: NextRequest) {
             const storedBreach = getStore().breaches.get(breach.id);
             if (storedBreach) storedBreach.mappedNodesCount = mappedNodes;
 
+            const breachProspects = getStore().prospects.filter(p => p.breachId === breach.id);
+
             allBreaches.push({
               id: breach.id,
               title: breach.title,
@@ -136,6 +138,11 @@ export async function POST(req: NextRequest) {
               companyName: breach.companyName,
               mappedNodesCount: mappedNodes,
             });
+
+            send('breach', { breach: allBreaches[allBreaches.length - 1] });
+            if (breachProspects.length > 0) {
+              send('prospects', { prospects: breachProspects });
+            }
           }
 
           const finalStore = getStore();
@@ -148,9 +155,7 @@ export async function POST(req: NextRequest) {
             prospectsIdentified: totalProspects,
           });
 
-          send('breaches', { breaches: allBreaches });
-          send('prospects', { prospects: finalStore.prospects });
-          send('progress', { message: `scan complete — ${breaches.length} breaches, ${totalVendors} vendors, ${totalProspects} prospects`, progress: 100 });
+          send('progress', { message: `scan complete — ${allBreaches.length} breaches, ${finalStore.vendors.size} vendors, ${finalStore.prospects.length} prospects`, progress: 100 });
         } catch (err) {
           send('error', { message: err instanceof Error ? err.message : 'scan failed' });
         } finally {

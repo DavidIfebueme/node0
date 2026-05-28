@@ -12,7 +12,7 @@ import type { Breach, Prospect } from '@/lib/types';
 export default function Dashboard() {
   const [filter, setFilter] = useState('all');
   const [scanLog, setScanLog] = useState<string[]>([]);
-  const { isScanning, setScanning, scanProgress, setScanProgress, breaches, prospects, setBreaches, setProspects, setLastScanAt } = useStore();
+  const { isScanning, setScanning, scanProgress, setScanProgress, breaches, prospects, addBreach, addProspects, setLastScanAt } = useStore();
 
   const handleScan = useCallback(async () => {
     if (isScanning) return;
@@ -55,10 +55,14 @@ export default function Dashboard() {
               if (currentEvent === 'progress') {
                 if (data.progress > 0) setScanProgress(Math.min(data.progress, 100));
                 if (data.message) log(data.message);
-              } else if (currentEvent === 'breaches') {
-                if (data.breaches) setBreaches(data.breaches as Breach[]);
+              } else if (currentEvent === 'breach') {
+                if (data.breach) {
+                  addBreach(data.breach as Breach);
+                }
               } else if (currentEvent === 'prospects') {
-                if (data.prospects) setProspects(data.prospects as Prospect[]);
+                if (data.prospects) {
+                  addProspects(data.prospects as Prospect[]);
+                }
               } else if (currentEvent === 'error') {
                 log(`error: ${data.message}`);
               }
@@ -76,7 +80,7 @@ export default function Dashboard() {
     } finally {
       setScanning(false);
     }
-  }, [isScanning, setScanning, setScanProgress, setBreaches, setProspects, setLastScanAt]);
+  }, [isScanning, setScanning, setScanProgress, addBreach, addProspects, setLastScanAt]);
 
   const filteredBreaches = breaches.filter(b => {
     if (filter === 'critical') return b.severity === 'CRITICAL';

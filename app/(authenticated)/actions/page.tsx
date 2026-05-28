@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { ToneSelector } from '@/components/actions/tone-selector';
 
 export default function ActionsPage() {
-  const { prospects } = useStore();
+  const { prospects, breaches } = useStore();
   const [selectedProspectId, setSelectedProspectId] = useState<string | null>(null);
   const selectedProspect = prospects.find(p => p.id === selectedProspectId) || prospects[0] || null;
   const [tone, setTone] = useState<'professional' | 'urgent' | 'casual'>('professional');
@@ -24,7 +24,21 @@ export default function ActionsPage() {
     setGeneratedEmail(null);
 
     try {
-      const result = await generateOutreach(selectedProspect.id, tone);
+      const breach = breaches.find(b => b.id === selectedProspect.breachId);
+      const vendorName = selectedProspect.connectionPath[1]?.name || 'Unknown Vendor';
+      const connectionPath = selectedProspect.connectionPath.map(p => `${p.type}: ${p.name}`).join(' → ');
+
+      const result = await generateOutreach({
+        breachTitle: breach?.title || '',
+        breachCompany: breach?.companyName || '',
+        breachType: breach?.breachType || '',
+        breachSeverity: breach?.severity || '',
+        breachDescription: breach?.description || '',
+        vendorName,
+        prospectCompany: selectedProspect.companyName,
+        prospectIndustry: selectedProspect.industry,
+        connectionPath,
+      }, tone);
       setGeneratedEmail(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'generation failed');

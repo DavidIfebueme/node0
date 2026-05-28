@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ReactFlow, Controls, Background, useNodesState, useEdgesState, BackgroundVariant } from '@xyflow/react';
-import { getMockGraphData } from '@/lib/mock-data';
+import { getGraphData } from '@/lib/api';
 import { OriginNode, VendorNode, AffectedNode, ProspectNode } from './custom-nodes';
 import { AnimatedEdge } from './custom-edges';
 
@@ -17,41 +17,69 @@ const edgeTypes = {
   animated: AnimatedEdge,
 };
 
+interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  animated?: boolean;
+}
+
+interface GraphNode {
+  id: string;
+  type: string;
+  position: { x: number; y: number };
+  data: Record<string, string>;
+}
+
+interface GraphData {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+const FALLBACK_DATA: GraphData = {
+  nodes: [
+    { id: 'n0', type: 'origin', position: { x: 0, y: 0 }, data: { label: 'Awaiting Scan', type: 'THIRD_PARTY' } },
+  ],
+  edges: [],
+};
+
 export function NetworkGraph({ breachId }: { breachId: string }) {
-  const initialData = getMockGraphData(breachId);
-  const [nodes, setNodes, onNodesChange] = useNodesState<any>(initialData.nodes);
+  const [graphData, setGraphData] = useState<GraphData>(FALLBACK_DATA);
+  const [nodes, setNodes, onNodesChange] = useNodesState<any>(FALLBACK_DATA.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<any>([]);
+
+  useEffect(() => {
+    getGraphData(breachId)
+      .then(data => {
+        if (data && data.nodes && data.nodes.length > 0) {
+          setGraphData(data);
+          setNodes(data.nodes);
+        }
+      })
+      .catch(() => {});
+  }, [breachId, setNodes]);
 
   useEffect(() => {
     let timeoutIds: NodeJS.Timeout[] = [];
 
+    if (graphData.edges.length === 0) return;
+
+    const vendorEdges = graphData.edges.filter(e => e.target.startsWith('vendor'));
+    const companyEdges = graphData.edges.filter(e => e.target.startsWith('company'));
+
     timeoutIds.push(setTimeout(() => {
-      setEdges(initialData.edges
-        .filter(e => e.target.startsWith('v'))
-        .map(e => ({ ...e, type: 'animated' }))
-      );
-    }, 1000));
+      setEdges(vendorEdges.map(e => ({ ...e, type: 'animated' })));
+    }, 800));
 
     timeoutIds.push(setTimeout(() => {
       setEdges(prev => [
         ...prev,
-        ...initialData.edges
-          .filter(e => e.target.startsWith('a'))
-          .map(e => ({ ...e, type: 'animated' }))
+        ...companyEdges.map(e => ({ ...e, type: 'animated' }))
       ]);
     }, 2000));
 
-    timeoutIds.push(setTimeout(() => {
-      setEdges(prev => [
-        ...prev,
-        ...initialData.edges
-          .filter(e => e.target.startsWith('p'))
-          .map(e => ({ ...e, type: 'animated' }))
-      ]);
-    }, 3000));
-
     return () => timeoutIds.forEach(clearTimeout);
-  }, []);
+  }, [graphData, setEdges]);
 
   return (
     <ReactFlow

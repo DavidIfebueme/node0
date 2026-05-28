@@ -1,19 +1,44 @@
 'use client';
 
-import React, { use } from 'react';
-import { MOCK_BREACHES, MOCK_PROSPECTS } from '@/lib/mock-data';
+import React, { use, useEffect, useState } from 'react';
+import { getBreachById, getGraphData } from '@/lib/api';
 import { GlitchText } from '@/components/ui/glitch-text';
 import { TerminalButton } from '@/components/ui/terminal-button';
-import { ArrowLeft, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import '@xyflow/react/dist/style.css';
 import { NetworkGraph } from '@/components/graph/network-graph';
+import type { Breach, Prospect } from '@/lib/types';
 
 export default function MapPage(props: { params: Promise<{ breachId: string }> }) {
   const params = use(props.params);
   const breachId = params.breachId;
-  const breach = MOCK_BREACHES.find(b => b.id === breachId) || MOCK_BREACHES[0];
-  const affectedProspects = MOCK_PROSPECTS.filter(p => p.breachId === breachId);
+  const [breach, setBreach] = useState<Breach | null>(null);
+  const [affectedProspects, setAffectedProspects] = useState<Prospect[]>([]);
+  const [graphData, setGraphData] = useState<any>(null);
+
+  useEffect(() => {
+    getBreachById(breachId).then(b => {
+      if (b) setBreach(b);
+    });
+    getGraphData(breachId).then(data => {
+      setGraphData(data);
+    });
+    fetch(`/api/breaches/${breachId}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.prospects) setAffectedProspects(data.prospects);
+      })
+      .catch(() => {});
+  }, [breachId]);
+
+  if (!breach) {
+    return (
+      <div className="flex items-center justify-center h-screen text-text-dim text-sm">
+        loading breach data...
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden absolute inset-0 pt-16">
@@ -73,22 +98,26 @@ export default function MapPage(props: { params: Promise<{ breachId: string }> }
         <div className="p-4 flex-1 overflow-y-auto hide-scrollbar">
           <div className="text-xs text-text-dim mb-4">//// targeted prospects</div>
           <div className="flex flex-col gap-3">
-            {affectedProspects.map(prospect => (
-              <div key={prospect.id} className="p-3 border border-border-default bg-bg-primary/50 hover:border-accent-cyan/50 cursor-pointer group transition-colors">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-text-primary text-sm font-bold group-hover:text-accent-cyan transition-colors">{prospect.companyName}</span>
-                  <span className="text-accent-cyan border border-accent-cyan/20 px-1 py-0.5 text-[10px]">
-                    {Math.round(prospect.relevanceScore * 100)}% Match
-                  </span>
+            {affectedProspects.length === 0 ? (
+              <div className="text-text-dim text-xs">no prospects mapped yet</div>
+            ) : (
+              affectedProspects.map(prospect => (
+                <div key={prospect.id} className="p-3 border border-border-default bg-bg-primary/50 hover:border-accent-cyan/50 cursor-pointer group transition-colors">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-text-primary text-sm font-bold group-hover:text-accent-cyan transition-colors">{prospect.companyName}</span>
+                    <span className="text-accent-cyan border border-accent-cyan/20 px-1 py-0.5 text-[10px]">
+                      {Math.round(prospect.relevanceScore * 100)}% Match
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs text-text-dim">
+                    <span>{prospect.connectionPath[0].name}</span>
+                    <span>→</span>
+                    <span>{prospect.connectionPath[1].name}</span>
+                    <span>→</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5 text-xs text-text-dim">
-                  <span>{prospect.connectionPath[0].name}</span>
-                  <span>→</span>
-                  <span>{prospect.connectionPath[1].name}</span>
-                  <span>→</span>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>

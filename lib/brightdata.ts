@@ -41,14 +41,21 @@ function classifyBreachType(description: string, title: string): BreachType {
 }
 
 function extractCompanyNameFromResult(item: DiscoverResultItem): string | null {
-  const stopWords = new Set(['The','This','That','These','Those','Biggest','Largest','Major','Recent','New','Latest','April','May','June','July','August','September','October','November','December','January','February','March','Were','Was','Has','Have','Had','Are','Is','More','Over','About','How','Why','What','When','Where','Who','Which','Their','Our','Your','Millions','Thousands','Hundreds','Several','Multiple','Many','Some','All','Most','Other','Another','First','Last','Next','Former','After','Before','During','Following','According','Based','Data','Security','Cyber','Breached','Hacked','Attacked','Compromised','Forced','Reported','Confirmed','Companies','Must','Disclose','People','Users','Customers','Vendor','Firm','Company','Healthcare','Provider','Government','Agency','Organization','Third','Party','Supply','Chain']);
+  const stopWords = new Set(['The','This','That','These','Those','Biggest','Largest','Major','Recent','New','Latest','April','May','June','July','August','September','October','November','December','January','February','March','Were','Was','Has','Have','Had','Are','Is','More','Over','About','How','Why','What','When','Where','Who','Which','Their','Our','Your','Millions','Thousands','Hundreds','Several','Multiple','Many','Some','All','Most','Other','Another','First','Last','Next','Former','After','Before','During','Following','According','Based','Data','Security','Cyber','Breached','Hacked','Attacked','Compromised','Forced','Reported','Confirmed','Companies','Must','Disclose','People','Users','Customers','Vendor','Firm','Company','Healthcare','Provider','Government','Agency','Organization','Third','Party','Supply','Chain','US','UK','EU','World','Global','National','State','Federal','Local','Public','Private','Online','Digital','Tech','Info','Group','Inc','Corp','Ltd','LLC']);
+
+  const text = `${item.title} ${item.description}`;
+
   const patterns = [
-    /(?:breach at|attack on|hack of|incident at)\s+([A-Z][A-Za-z0-9]+(?:\s[A-Z][A-Za-z0-9]+){0,2})/i,
-    /([A-Z][A-Za-z0-9]+(?:\s[A-Z][A-Za-z0-9]+)?)\s+(?:suffered|confirmed|reported|disclosed)\s+(?:a\s+)?(?:data\s+)?breach/i,
-    /([A-Z][A-Za-z0-9]+(?:\s[A-Z][A-Za-z0-9]+)?)\s+(?:was|has been)\s+(?:breached|hacked|compromised|attacked)/i,
+    /(?:breach(?:ed)?\s+(?:at|by|on|in|of)\s+|attack(?:ed)?\s+(?:on|at)\s+|hack(?:ed)?\s+(?:at|on|of)\s+|incident\s+(?:at|on|involving)\s+|compromised\s+(?:at|by)\s+)([A-Z][A-Za-z0-9]+(?:\s[A-Z][A-Za-z0-9]+){0,2})/i,
+    /([A-Z][A-Za-z0-9]+(?:\s[A-Z][A-Za-z0-9]+){0,2})\s+(?:suffered|confirmed|reported|disclosed|announced|revealed)\s+(?:a\s+)?(?:data\s+)?(?:breach|leak|hack|attack|incident|compromise)/i,
+    /([A-Z][A-Za-z0-9]+(?:\s[A-Z][A-Za-z0-9]+){0,2})\s+(?:was|has been|had been|is|got)\s+(?:breached|hacked|compromised|attacked|hit|impacted|affected)/i,
+    /([A-Z][A-Za-z0-9]+(?:\s[A-Z][A-Za-z0-9]+){0,2})\s+(?:data|customer|user|employee)\s+(?:breach|leak|exposure|theft)/i,
+    /(?:data\s+breach|cyber\s+attack|security\s+incident|ransomware\s+attack)\s+(?:at|on|hits|targets|affects|impacts)\s+([A-Z][A-Za-z0-9]+(?:\s[A-Z][A-Za-z0-9]+){0,2})/i,
+    /([A-Z][A-Za-z0-9]+(?:\s[A-Z][A-Za-z0-9]+){0,2})\s+(?:says|confirms|reports)\s+(?:data\s+)?(?:breach|leak|hack)/i,
   ];
+
   for (const pattern of patterns) {
-    const match = item.title.match(pattern) || item.description.match(pattern);
+    const match = text.match(pattern);
     if (match) {
       const name = match[1].trim();
       const words = name.split(/\s+/);
@@ -58,6 +65,25 @@ function extractCompanyNameFromResult(item: DiscoverResultItem): string | null {
       return name;
     }
   }
+
+  const knownCompanies = [
+    'Snowflake','Okta','SolarWinds','Salesforce','Stripe','Shopify','Slack','Datadog',
+    'CrowdStrike','Twilio','Atlassian','HubSpot','PagerDuty','MongoDB','Elastic',
+    'Cloudflare','Zscaler','Palo Alto','Fortinet','ServiceNow','Workday','Zoom',
+    'Dropbox','LastPass','MoveIT','Citrix','VMware','Cisco','Juniper','Norton',
+    'T-Mobile','AT&T','Verizon','Equifax','Capital One','Target','Home Depot',
+    'Marriott','Yahoo','LinkedIn','Adobe','Sony','Ashley Madison','Uber','Facebook',
+    'Google','Microsoft','Apple','Amazon','Netflix','Spotify','Twitter','X','Meta',
+    'Ticketmaster','Change Healthcare','Ascension','AT&T','Fidelity','Fiserv',
+    'Broadcom','SAP','Oracle','IBM','HP','Dell','Lenovo','Samsung','Intel','AMD',
+    'NVIDIA','Qualcomm','Texas Instruments','Microchip',
+  ];
+
+  for (const company of knownCompanies) {
+    const regex = new RegExp(`\\b${company.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    if (regex.test(text)) return company;
+  }
+
   return null;
 }
 
@@ -76,17 +102,19 @@ export async function scanForBreachRelevance(onProgress?: ScanProgressCallback):
 
   const targetNames = targets.slice(0, 6).map(t => t.name);
   const queries = [
-    `data breach 2026 ${targetNames.slice(0, 3).join(' OR ')}`,
-    `cybersecurity incident ${targetNames.slice(3, 6).join(' OR ')}`,
-    'data breach security incident company 2026',
+    `data breach 2025 2026 ${targetNames.slice(0, 3).join(' OR ')}`,
+    `cybersecurity incident ransomware hack ${targetNames.slice(3, 6).join(' OR ')}`,
+    'major data breach cyber attack company 2025 2026',
+    'supply chain attack third party vendor compromise 2025 2026',
+    'credential leak data exposure hack breach enterprise',
   ];
 
   const liveResults = await Promise.allSettled(
     queries.map(query =>
       c.discover(query, {
-        intent: `security breaches and cyber incidents affecting companies, especially relevant to ${profile.industry} vendors`,
+        intent: `security breaches, cyber incidents, data leaks, and ransomware attacks affecting companies — especially relevant to ${profile.industry} vendors and their customers`,
         includeContent: false,
-        numResults: 10,
+        numResults: 15,
       })
     )
   );
@@ -94,20 +122,20 @@ export async function scanForBreachRelevance(onProgress?: ScanProgressCallback):
   for (const result of liveResults) {
     if (result.status !== 'fulfilled' || !result.value.success || !result.value.data) continue;
     for (const item of result.value.data) {
-      if (item.relevance_score < 0.4) continue;
+      if (item.relevance_score < 0.25) continue;
       const companyName = extractCompanyNameFromResult(item);
       if (!companyName) continue;
       const existingBreach = Array.from(getStore().breaches.values()).find(
         b => b.companyName.toLowerCase() === companyName.toLowerCase()
-      );
+      ) || breaches.find(b => b.companyName.toLowerCase() === companyName.toLowerCase());
       if (existingBreach) continue;
-      if (breaches.length >= 5) break;
+      if (breaches.length >= 10) break;
 
       const company = getOrCreateCompany(companyName, `${companyName.toLowerCase().replace(/\s+/g, '')}.com`, 'Technology');
       const breach: Breach = {
         id: generateBreachId(),
-        title: item.title.length > 80 ? item.title.slice(0, 77) + '...' : item.title,
-        description: item.description.length > 200 ? item.description.slice(0, 197) + '...' : item.description,
+        title: item.title.length > 200 ? item.title.slice(0, 197) + '...' : item.title,
+        description: item.description.length > 500 ? item.description.slice(0, 497) + '...' : item.description,
         severity: classifySeverity(item.description, item.title),
         breachType: classifyBreachType(item.description, item.title),
         detectedAt: new Date().toISOString(),
@@ -119,7 +147,7 @@ export async function scanForBreachRelevance(onProgress?: ScanProgressCallback):
       breaches.push(breach);
       onProgress?.('detect', `found breach: ${companyName}`);
     }
-    if (breaches.length >= 5) break;
+    if (breaches.length >= 10) break;
   }
 
   return breaches;

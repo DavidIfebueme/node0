@@ -128,9 +128,12 @@ export async function POST(req: NextRequest) {
             allBreaches.push({
               id: breach.id,
               title: breach.title,
-              companyName: breach.companyName,
+              description: breach.description,
               severity: breach.severity,
               breachType: breach.breachType,
+              detectedAt: breach.detectedAt,
+              companyId: breach.companyId,
+              companyName: breach.companyName,
               mappedNodesCount: mappedNodes,
             });
           }

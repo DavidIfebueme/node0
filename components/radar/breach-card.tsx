@@ -18,8 +18,10 @@ const SEVERITY_SYMBOL: Record<string, { symbol: string; color: string }> = {
 export function BreachCard({ breach, index }: { breach: Breach; index: number }) {
   const router = useRouter();
   const sev = SEVERITY_SYMBOL[breach.severity] || SEVERITY_SYMBOL.LOW;
-  const timestamp = format(new Date(breach.detectedAt), 'HH:mm:ss');
-  const timeAgo = formatDistanceToNow(new Date(breach.detectedAt));
+  const dateValue = breach.detectedAt ? new Date(breach.detectedAt) : new Date();
+  const isValidDate = !isNaN(dateValue.getTime());
+  const timestamp = isValidDate ? format(dateValue, 'HH:mm:ss') : '--:--:--';
+  const timeAgo = isValidDate ? formatDistanceToNow(dateValue) : 'just now';
 
   return (
     <motion.div

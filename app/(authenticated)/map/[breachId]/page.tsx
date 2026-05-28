@@ -33,7 +33,7 @@ export default function MapPage(props: { params: Promise<{ breachId: string }> }
         <NetworkGraph breachId={breachId} />
 
         <div className="absolute bottom-6 left-6 right-6 flex justify-between items-center z-10 pointer-events-none">
-          <Link href="/" className="pointer-events-auto">
+          <Link href="/dashboard" className="pointer-events-auto">
             <TerminalButton variant="ghost">
               <ArrowLeft size={14} /> back to radar
             </TerminalButton>

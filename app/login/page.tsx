@@ -29,7 +29,7 @@ export default function LoginPage() {
     if (result?.error) {
       setError('authentication failed. check credentials.');
     } else {
-      router.push('/');
+      router.push('/dashboard');
     }
   };
 

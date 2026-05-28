@@ -1,11 +1,11 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { HeroScene } from '@/components/landing/hero-scene';
 import { TerminalButton } from '@/components/ui/terminal-button';
 import { motion } from 'motion/react';
-import { Search, GitBranch, Send, Shield, Globe, Database, Eye, Cpu, Server } from 'lucide-react';
+import { Search, GitBranch, Send, Shield, Globe, Database, Cpu, Server } from 'lucide-react';
 
 const STEPS = [
   {
@@ -34,11 +34,21 @@ const PRODUCTS = [
   { name: 'proxies', desc: '400m+ ips for reliable at-scale access', icon: Server },
 ];
 
+const STATE_LABELS: Record<string, string> = {
+  idle: 'click to trace',
+  breaching: 'breach detected',
+  tracing: 'tracing blast radius...',
+  exposed: 'prospects identified',
+  reassembling: 'resetting...',
+};
+
 export default function LandingPage() {
+  const [animState, setAnimState] = useState('idle');
+
   return (
     <div className="bg-bg-primary text-text-primary font-mono min-h-screen overflow-x-hidden">
       <nav className="fixed top-0 left-0 right-0 z-50 h-14 flex items-center justify-between px-6 border-b border-border-default bg-bg-primary/80 backdrop-blur-md">
-        <Link href="/landing" className="text-lg font-bold tracking-wider">
+        <Link href="/" className="text-lg font-bold tracking-wider">
           node<span className="text-accent-red">0</span>
         </Link>
         <div className="flex items-center gap-4 text-xs">
@@ -48,16 +58,19 @@ export default function LandingPage() {
       </nav>
 
       <section className="relative h-screen flex flex-col items-center justify-center">
-        <div className="absolute inset-0">
-          <HeroScene />
+        <div className="absolute inset-0 z-0">
+          <HeroScene onStateChange={setAnimState} />
         </div>
 
-        <div className="relative z-10 pointer-events-none flex flex-col items-center">
-          <div className="text-4xl md:text-5xl font-bold tracking-widest mb-3">
+        <div className="relative z-10 pointer-events-none flex flex-col items-center text-center px-4">
+          <div className="text-4xl md:text-6xl font-bold tracking-widest mb-3">
             node<span className="text-accent-red custom-pulse-red">0</span>
           </div>
-          <div className="text-text-secondary text-sm tracking-wide">
+          <div className="text-text-secondary text-sm tracking-wide mb-6">
             contact tracing for enterprise security
+          </div>
+          <div className={`text-xs transition-all duration-300 ${animState === 'tracing' ? 'text-accent-red' : animState === 'exposed' ? 'text-accent-cyan' : 'text-text-dim'}`}>
+            {STATE_LABELS[animState] || STATE_LABELS.idle}
           </div>
         </div>
 
@@ -137,7 +150,7 @@ export default function LandingPage() {
         >
           <div className="text-2xl font-bold">ready to trace?</div>
           <div className="flex items-center gap-4">
-            <Link href="/">
+            <Link href="/dashboard">
               <TerminalButton variant="primary">launch dashboard</TerminalButton>
             </Link>
             <TerminalButton variant="default">view docs</TerminalButton>
@@ -146,7 +159,7 @@ export default function LandingPage() {
       </section>
 
       <footer className="border-t border-border-default py-8 px-6 text-center text-xs text-text-dim">
-        // node0 © 2026 · built for the bright data x lablab hackathon
+        // node0 © 2026
       </footer>
     </div>
   );

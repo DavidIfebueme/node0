@@ -32,7 +32,7 @@ export function Header() {
   }, []);
 
   const navLinks = [
-    { href: '/', label: '[ radar ]', active: pathname === '/' },
+    { href: '/dashboard', label: '[ radar ]', active: pathname === '/dashboard' },
     { href: '/actions', label: '[ actions ]', active: pathname === '/actions' },
     { href: '/settings', label: '[ settings ]', active: pathname === '/settings' },
   ];
@@ -40,7 +40,7 @@ export function Header() {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 h-16 border-b border-border-default bg-bg-primary/80 backdrop-blur-md flex items-center justify-between px-6">
       <div className="flex items-center gap-8">
-        <Link href="/" className="text-xl font-bold tracking-wider text-text-primary flex items-center gap-1">
+        <Link href="/dashboard" className="text-xl font-bold tracking-wider text-text-primary flex items-center gap-1">
           node<span className="text-accent-red custom-pulse-red">0</span>
         </Link>
         <nav className="hidden md:flex items-center gap-4 text-sm text-text-secondary">
@@ -94,7 +94,7 @@ export function Header() {
                 {session?.user?.email || 'operator'}
               </div>
               <button
-                onClick={() => { setMenuOpen(false); signOut({ callbackUrl: '/landing' }); }}
+                onClick={() => { setMenuOpen(false); signOut({ callbackUrl: '/' }); }}
                 className="w-full text-left px-3 py-2 text-xs text-text-secondary hover:bg-bg-elevated hover:text-accent-red transition-colors"
               >
                 [logout]

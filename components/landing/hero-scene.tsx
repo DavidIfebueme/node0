@@ -1,16 +1,11 @@
 'use client';
 
-import React, { useRef, useMemo, useState, useCallback } from 'react';
+import React, { useRef, useMemo, useState, useCallback, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { Text, Line } from '@react-three/drei';
-import { EffectComposer, Bloom } from '@react-three/postprocessing';
-
-type AnimState = 'idle' | 'breaching' | 'tracing' | 'exposed' | 'reassembling';
 
 const NODE_COUNT = 45;
 const EDGE_DISTANCE = 1.2;
-const LABELS = ['ORIGIN', 'TRACE', 'VENDOR', 'BLAST', 'PROSPECT', 'NODE0'];
 
 function fibonacciSphere(n: number, radius: number): THREE.Vector3[] {
   const points: THREE.Vector3[] = [];
@@ -27,18 +22,19 @@ function fibonacciSphere(n: number, radius: number): THREE.Vector3[] {
   return points;
 }
 
-function ZeroNode() {
+function ZeroNode({ onStateChange }: { onStateChange: (state: string) => void }) {
   const groupRef = useRef<THREE.Group>(null);
-  const [animState, setAnimState] = useState<AnimState>('idle');
+  const animState = useRef<'idle' | 'breaching' | 'tracing' | 'exposed' | 'reassembling'>('idle');
   const animTime = useRef(0);
-  const nodeRefs = useRef<THREE.Mesh[]>([]);
-  const { viewport } = useThree();
+  const nodesRef = useRef<THREE.InstancedMesh>(null);
+  const edgesRef = useRef<THREE.LineSegments>(null);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const dummyColor = useMemo(() => new THREE.Color(), []);
 
   const originalPositions = useMemo(() => fibonacciSphere(NODE_COUNT, 1.8), []);
   const targetPositions = useRef<THREE.Vector3[]>(originalPositions.map(p => p.clone()));
   const currentPositions = useRef<THREE.Vector3[]>(originalPositions.map(p => p.clone()));
-  const nodeColors = useRef<string[]>(Array(NODE_COUNT).fill('#e8e8ed'));
-  const nodeOpacities = useRef<number[]>(Array(NODE_COUNT).fill(0.6));
+  const nodeColorsArr = useRef<Float32Array>(new Float32Array(NODE_COUNT * 3).fill(0.91));
   const nodeScales = useRef<number[]>(Array(NODE_COUNT).fill(1));
 
   const edges = useMemo(() => {
@@ -87,146 +83,159 @@ function ZeroNode() {
   }, [edges, centerNodeIndex]);
 
   const handleClick = useCallback(() => {
-    if (animState !== 'idle') return;
-    setAnimState('breaching');
+    if (animState.current !== 'idle') return;
+    animState.current = 'breaching';
     animTime.current = 0;
-  }, [animState]);
+    onStateChange('breaching');
+  }, [onStateChange]);
+
+  useEffect(() => {
+    if (nodesRef.current) {
+      for (let i = 0; i < NODE_COUNT; i++) {
+        dummyColor.set('#e8e8ed');
+        nodesRef.current.setColorAt(i, dummyColor);
+      }
+      nodesRef.current.instanceColor!.needsUpdate = true;
+    }
+  }, []);
 
   useFrame((state, delta) => {
-    if (!groupRef.current) return;
+    if (!groupRef.current || !nodesRef.current) return;
 
     groupRef.current.rotation.y += delta * 0.05;
+    const t = state.clock.elapsedTime;
+    groupRef.current.position.y = Math.sin(t * 0.5) * 0.1;
 
-    if (animState === 'idle') {
-      const t = state.clock.elapsedTime;
-      groupRef.current.position.y = Math.sin(t * 0.5) * 0.1;
-      return;
-    }
-
+    const st = animState.current;
     animTime.current += delta;
 
-    if (animState === 'breaching' && animTime.current > 0.5) {
-      setAnimState('tracing');
+    if (st === 'breaching' && animTime.current > 0.5) {
+      animState.current = 'tracing';
       animTime.current = 0;
+      onStateChange('tracing');
     }
 
-    if (animState === 'tracing') {
-      nodeColors.current[centerNodeIndex] = '#ff2d4a';
+    if (st === 'tracing') {
+      dummyColor.set('#ff2d4a');
+      nodesRef.current.setColorAt(centerNodeIndex, dummyColor);
       nodeScales.current[centerNodeIndex] = 2;
 
-      connectedToCenter.forEach(idx => {
-        if (animTime.current > 0.3) {
-          nodeColors.current[idx] = '#ff8a00';
+      if (animTime.current > 0.3) {
+        connectedToCenter.forEach(idx => {
+          dummyColor.set('#ff8a00');
+          nodesRef.current!.setColorAt(idx, dummyColor);
           const dir = currentPositions.current[idx].clone().normalize();
           targetPositions.current[idx] = originalPositions[idx].clone().add(dir.multiplyScalar(2));
-        }
-      });
+        });
+      }
 
       if (animTime.current > 1.0) {
         prospectIndices.forEach(idx => {
-          nodeColors.current[idx] = '#00e5ff';
+          dummyColor.set('#00e5ff');
+          nodesRef.current!.setColorAt(idx, dummyColor);
           nodeScales.current[idx] = 1.5;
           const dir = currentPositions.current[idx].clone().normalize();
           targetPositions.current[idx] = originalPositions[idx].clone().add(dir.multiplyScalar(3));
         });
-
-        edges.forEach(([a, b], ei) => {
-          if (a === centerNodeIndex || b === centerNodeIndex) {
-            edgeOpacities.current[ei] = Math.max(0, edgeOpacities.current[ei] - delta * 0.5);
-          }
-        });
       }
 
       if (animTime.current > 2.0) {
-        setAnimState('exposed');
+        animState.current = 'exposed';
         animTime.current = 0;
+        onStateChange('exposed');
       }
     }
 
-    if (animState === 'exposed') {
-      if (animTime.current > 2.0) {
-        setAnimState('reassembling');
-        animTime.current = 0;
-        targetPositions.current = originalPositions.map(p => p.clone());
-        nodeColors.current = Array(NODE_COUNT).fill('#e8e8ed');
-        nodeScales.current = Array(NODE_COUNT).fill(1);
-        edgeOpacities.current = Array(edges.length).fill(0.2);
+    if (st === 'exposed' && animTime.current > 2.0) {
+      animState.current = 'reassembling';
+      animTime.current = 0;
+      onStateChange('reassembling');
+      targetPositions.current = originalPositions.map(p => p.clone());
+      for (let i = 0; i < NODE_COUNT; i++) {
+        dummyColor.set('#e8e8ed');
+        nodesRef.current.setColorAt(i, dummyColor);
+        nodeScales.current[i] = 1;
       }
+      edgeOpacities.current = Array(edges.length).fill(0.2);
     }
 
-    if (animState === 'reassembling') {
-      if (animTime.current > 2.0) {
-        setAnimState('idle');
-        animTime.current = 0;
-      }
+    if (st === 'reassembling' && animTime.current > 2.0) {
+      animState.current = 'idle';
+      animTime.current = 0;
+      onStateChange('idle');
     }
 
     currentPositions.current.forEach((pos, i) => {
       pos.lerp(targetPositions.current[i], delta * 1.5);
-      if (nodeRefs.current[i]) {
-        nodeRefs.current[i].position.copy(pos);
-        nodeRefs.current[i].scale.setScalar(nodeScales.current[i]);
-      }
+      dummy.position.copy(pos);
+      dummy.scale.setScalar(nodeScales.current[i]);
+      dummy.updateMatrix();
+      nodesRef.current!.setMatrixAt(i, dummy.matrix);
     });
+    nodesRef.current.instanceMatrix.needsUpdate = true;
+    if (nodesRef.current.instanceColor) nodesRef.current.instanceColor.needsUpdate = true;
+
+    if (edgesRef.current) {
+      const posAttr = edgesRef.current.geometry.attributes.position as THREE.BufferAttribute;
+      let idx = 0;
+      edges.forEach(([a, b]) => {
+        const startPos = currentPositions.current[a];
+        const endPos = currentPositions.current[b];
+        posAttr.setXYZ(idx++, startPos.x, startPos.y, startPos.z);
+        posAttr.setXYZ(idx++, endPos.x, endPos.y, endPos.z);
+      });
+      posAttr.needsUpdate = true;
+    }
   });
+
+  const edgePositions = useMemo(() => {
+    const arr = new Float32Array(edges.length * 6);
+    let idx = 0;
+    edges.forEach(([a, b]) => {
+      const s = originalPositions[a];
+      const e = originalPositions[b];
+      arr[idx++] = s.x; arr[idx++] = s.y; arr[idx++] = s.z;
+      arr[idx++] = e.x; arr[idx++] = e.y; arr[idx++] = e.z;
+    });
+    return arr;
+  }, [edges, originalPositions]);
+
+  const edgeColors = useMemo(() => {
+    const arr = new Float32Array(edges.length * 6);
+    for (let i = 0; i < edges.length; i++) {
+      const c = 0.15;
+      arr[i * 6] = c; arr[i * 6 + 1] = c; arr[i * 6 + 2] = c + 0.05;
+      arr[i * 6 + 3] = c; arr[i * 6 + 4] = c; arr[i * 6 + 5] = c + 0.05;
+    }
+    return arr;
+  }, [edges.length]);
 
   return (
     <group ref={groupRef} onClick={handleClick}>
-      {originalPositions.map((pos, i) => (
-        <mesh
-          key={i}
-          ref={(el) => { if (el) nodeRefs.current[i] = el; }}
-          position={currentPositions.current[i]}
-        >
-          <sphereGeometry args={[0.06, 8, 8]} />
-          <meshBasicMaterial color={nodeColors.current[i]} transparent opacity={0.6} />
-        </mesh>
-      ))}
+      <instancedMesh ref={nodesRef} args={[undefined, undefined, NODE_COUNT]}>
+        <sphereGeometry args={[0.06, 8, 8]} />
+        <meshBasicMaterial transparent opacity={0.7} />
+      </instancedMesh>
 
-      {edges.map(([a, b], i) => {
-        const startPos = currentPositions.current[a];
-        const endPos = currentPositions.current[b];
-        return (
-          <Line
-            key={`e-${i}`}
-            points={[startPos.toArray(), endPos.toArray()]}
-            color="#00e5ff"
-            lineWidth={0.5}
-            transparent
-            opacity={edgeOpacities.current[i]}
+      <lineSegments ref={edgesRef}>
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            args={[edgePositions, 3]}
           />
-        );
-      })}
-
-      {LABELS.map((label, i) => {
-        const angle = (i / LABELS.length) * Math.PI * 2;
-        const r = 3.2;
-        return (
-          <Text
-            key={label}
-            position={[Math.cos(angle) * r, Math.sin(angle * 0.7) * 0.8, Math.sin(angle) * r * 0.5]}
-            fontSize={0.15}
-            color="#6b6b7a"
-            anchorX="center"
-            anchorY="middle"
-            font="/fonts/JetBrainsMono-Regular.woff2"
-          >
-            {label}
-          </Text>
-        );
-      })}
+        </bufferGeometry>
+        <lineBasicMaterial color="#2a2a3a" transparent opacity={0.25} />
+      </lineSegments>
     </group>
   );
 }
 
-export function HeroScene() {
+export function HeroScene({ onStateChange }: { onStateChange: (state: string) => void }) {
   return (
     <div className="w-full h-full cursor-pointer">
-      <Canvas camera={{ position: [0, 0, 6], fov: 50 }}>
-        <ZeroNode />
-        <EffectComposer>
-          <Bloom luminanceThreshold={0.2} luminanceSmoothing={0.9} intensity={0.8} />
-        </EffectComposer>
+      <Canvas camera={{ position: [0, 0, 6], fov: 50 }} gl={{ alpha: true, antialias: true }}>
+        <color attach="background" args={['#07070a']} />
+        <ZeroNode onStateChange={onStateChange} />
       </Canvas>
     </div>
   );

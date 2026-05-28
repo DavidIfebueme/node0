@@ -31,7 +31,7 @@ export default function SignupPage() {
     if (result?.error) {
       setError('initialization failed.');
     } else {
-      router.push('/');
+      router.push('/dashboard');
     }
   };
 

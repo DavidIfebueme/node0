@@ -65,132 +65,6 @@ export interface ScanProgressCallback {
   (stage: string, detail: string): void;
 }
 
-interface KnownBreach {
-  companyName: string;
-  domain: string;
-  title: string;
-  description: string;
-  severity: Severity;
-  breachType: BreachType;
-  vendors: Array<{ name: string; category: string }>;
-  customers: Array<{ name: string; id: string }>;
-}
-
-const KNOWN_BREACHES: KnownBreach[] = [
-  {
-    companyName: 'Snowflake',
-    domain: 'snowflake.com',
-    title: 'Snowflake Account Breach — Customer Data Exposed',
-    description: 'Attackers exploited stolen credentials to access Snowflake customer instances. Hundreds of organizations affected through shared cloud data warehouse infrastructure.',
-    severity: 'CRITICAL',
-    breachType: 'CREDENTIAL_EXPOSURE',
-    vendors: [
-      { name: 'AWS', category: 'Infrastructure' },
-      { name: 'Okta', category: 'Identity' },
-      { name: 'Salesforce', category: 'CRM' },
-      { name: 'Datadog', category: 'Observability' },
-    ],
-    customers: [
-      { name: 'Stripe', id: 't-001' },
-      { name: 'Shopify', id: 't-002' },
-      { name: 'Slack', id: 't-003' },
-      { name: 'Salesforce', id: 't-010' },
-      { name: 'HubSpot', id: 't-011' },
-    ],
-  },
-  {
-    companyName: 'Okta',
-    domain: 'okta.com',
-    title: 'Okta Identity Provider Compromised — Supply Chain Attack',
-    description: 'Unauthorized access to Okta support system exposed customer identity configurations. Potential for lateral movement across all Okta-managed environments.',
-    severity: 'CRITICAL',
-    breachType: 'THIRD_PARTY',
-    vendors: [
-      { name: 'AWS', category: 'Infrastructure' },
-      { name: 'Azure', category: 'Infrastructure' },
-      { name: 'Cloudflare', category: 'Security' },
-      { name: 'Slack', category: 'Communication' },
-    ],
-    customers: [
-      { name: 'Slack', id: 't-003' },
-      { name: 'Datadog', id: 't-004' },
-      { name: 'Twilio', id: 't-007' },
-      { name: 'Atlassian', id: 't-009' },
-      { name: 'Salesforce', id: 't-010' },
-      { name: 'PagerDuty', id: 't-012' },
-    ],
-  },
-  {
-    companyName: 'SolarWinds',
-    domain: 'solarwinds.com',
-    title: 'SolarWinds Orion Supply Chain Attack',
-    description: 'Nation-state actors compromised SolarWinds build system, injecting backdoor into Orion updates. 18,000+ organizations affected including US government agencies.',
-    severity: 'CRITICAL',
-    breachType: 'THIRD_PARTY',
-    vendors: [
-      { name: 'Azure', category: 'Infrastructure' },
-      { name: 'AWS', category: 'Infrastructure' },
-      { name: 'CrowdStrike', category: 'Security' },
-      { name: 'Salesforce', category: 'CRM' },
-    ],
-    customers: [
-      { name: 'CrowdStrike', id: 't-006' },
-      { name: 'Atlassian', id: 't-009' },
-      { name: 'Salesforce', id: 't-010' },
-      { name: 'Shopify', id: 't-002' },
-    ],
-  },
-];
-
-function supplementWithKnownBreaches(existingBreaches: Breach[], onProgress?: ScanProgressCallback): Breach[] {
-  const existingNames = new Set(existingBreaches.map(b => b.companyName.toLowerCase()));
-  const supplemented: Breach[] = [];
-
-  for (const known of KNOWN_BREACHES) {
-    if (existingNames.has(known.companyName.toLowerCase())) continue;
-    if (supplemented.length + existingBreaches.length >= 5) break;
-
-    const company = getOrCreateCompany(known.companyName, known.domain, 'Technology');
-
-    const breach: Breach = {
-      id: generateBreachId(),
-      title: known.title,
-      description: known.description,
-      severity: known.severity,
-      breachType: known.breachType,
-      detectedAt: new Date(Date.now() - Math.random() * 3600000).toISOString(),
-      companyId: company.id,
-      companyName: known.companyName,
-      mappedNodesCount: 0,
-    };
-
-    addBreach(breach);
-    supplemented.push(breach);
-
-    for (const v of known.vendors) {
-      const vendor = getOrCreateVendor(v.name, v.category);
-      addRelationship({
-        sourceCompanyId: company.id,
-        targetVendorId: vendor.id,
-        confidence: 0.9,
-        discoveredFrom: 'known_intelligence',
-      });
-    }
-
-    for (const cust of known.customers) {
-      addRelationship({
-        sourceCompanyId: cust.id,
-        targetVendorId: getOrCreateVendor(known.vendors[0].name, known.vendors[0].category).id,
-        confidence: 0.7,
-        discoveredFrom: 'known_intelligence',
-      });
-    }
-
-    onProgress?.('detect', `loaded known breach: ${known.companyName}`);
-  }
-
-  return supplemented;
-}
 
 export async function scanForBreachRelevance(onProgress?: ScanProgressCallback): Promise<Breach[]> {
   const c = getClient();
@@ -248,8 +122,7 @@ export async function scanForBreachRelevance(onProgress?: ScanProgressCallback):
     if (breaches.length >= 5) break;
   }
 
-  const supplemented = supplementWithKnownBreaches(breaches, onProgress);
-  return [...breaches, ...supplemented];
+  return breaches;
 }
 
 

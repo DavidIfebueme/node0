@@ -57,24 +57,24 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      <section className="relative h-screen flex flex-col items-center justify-center">
-        <div className="absolute inset-0 z-0">
+      <section className="relative h-screen flex flex-col items-center justify-center overflow-hidden">
+        <div className="absolute inset-0 z-0 opacity-60">
           <HeroScene onStateChange={setAnimState} />
         </div>
 
-        <div className="relative z-10 pointer-events-none flex flex-col items-center text-center px-4">
-          <div className="text-4xl md:text-6xl font-bold tracking-widest mb-3">
+        <div className="relative z-10 pointer-events-none flex flex-col items-center text-center px-4 select-none" style={{ textShadow: '0 2px 20px rgba(7,7,10,0.8)' }}>
+          <div className="text-5xl md:text-7xl font-bold tracking-widest mb-4 text-white">
             node<span className="text-accent-red custom-pulse-red">0</span>
           </div>
-          <div className="text-text-secondary text-sm tracking-wide mb-6">
+          <div className="text-text-secondary/80 text-base tracking-wide mb-6">
             contact tracing for enterprise security
           </div>
-          <div className={`text-xs transition-all duration-300 ${animState === 'tracing' ? 'text-accent-red' : animState === 'exposed' ? 'text-accent-cyan' : 'text-text-dim'}`}>
-            {STATE_LABELS[animState] || STATE_LABELS.idle}
+          <div className={`text-xs tracking-wider uppercase transition-all duration-300 ${animState === 'exploding' ? 'text-accent-red' : animState === 'idle' ? 'text-text-dim/60' : 'text-text-dim'}`}>
+            {animState === 'idle' ? 'click anywhere to trace' : animState === 'exploding' ? 'tracing blast radius...' : ''}
           </div>
         </div>
 
-        <div className="absolute bottom-8 z-10 flex flex-col items-center gap-2 text-text-dim text-xs animate-bounce">
+        <div className="absolute bottom-12 z-10 flex flex-col items-center gap-1.5 text-text-dim/40 text-[10px] animate-bounce">
           <span>scroll</span>
           <span>↓</span>
         </div>

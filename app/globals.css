@@ -1,0 +1,63 @@
+@import "tailwindcss";
+@import "@xyflow/react/dist/style.css";
+
+@theme {
+  --color-bg-primary: #07070a;
+  --color-bg-surface: #0e0e14;
+  --color-bg-elevated: #16161f;
+  --color-border-default: #1e1e2a;
+  --color-border-muted: #14141c;
+  --color-text-primary: #e8e8ed;
+  --color-text-secondary: #6b6b7a;
+  --color-text-dim: #3a3a48;
+  --color-accent-red: #ff2d4a;
+  --color-accent-cyan: #00e5ff;
+  --color-accent-orange: #ff8a00;
+  --color-accent-green: #00ff88;
+  --color-glitch-cyan: #00ffff;
+  --color-glitch-magenta: #ff00ff;
+
+  --font-mono: "JetBrains Mono", monospace;
+  --font-sans: "JetBrains Mono", monospace; 
+}
+
+body {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  overflow-x: hidden;
+}
+
+@keyframes glitch-split {
+  0% { transform: translateX(0); clip-path: inset(0 0 0 0); }
+  20% { transform: translateX(-2px); clip-path: inset(20% 0 80% 0); text-shadow: 2px 0 var(--color-glitch-cyan); }
+  40% { transform: translateX(2px); clip-path: inset(60% 0 10% 0); text-shadow: -2px 0 var(--color-glitch-magenta); }
+  60% { transform: translateX(-1px); clip-path: inset(40% 0 40% 0); text-shadow: 2px 0 var(--color-glitch-cyan); }
+  80% { transform: translateX(1px); clip-path: inset(80% 0 5% 0); text-shadow: -2px 0 var(--color-glitch-magenta); }
+  100% { transform: translateX(0); clip-path: inset(0 0 0 0); text-shadow: none; }
+}
+
+.animate-glitch {
+  animation: glitch-split 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+.custom-pulse-red {
+  animation: pulse-red 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+@keyframes pulse-red {
+  0%, 100% { box-shadow: 0 0 10px var(--color-accent-red); }
+  50% { box-shadow: 0 0 25px var(--color-accent-red); }
+}
+
+.xyflow__node {
+  font-family: var(--font-mono);
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

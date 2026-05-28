@@ -6,7 +6,8 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
-  const { step } = await req.json();
+  const body = await req.json();
+  const step = body.step;
 
   if (step === 'init') {
     resetStore();
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (step === 'map') {
-    const { breachId } = await req.json();
+    const breachId = body.breachId;
     const breach = getStore().breaches.get(breachId);
     if (!breach) return NextResponse.json({ error: 'breach not found' }, { status: 404 });
 

@@ -3,6 +3,7 @@ import {
   addBreach, addRelationship, addProspect,
   getOrCreateCompany, getOrCreateVendor, getTargetAccounts, getStore, getProfile,
 } from './server-store';
+import { extractBreachData } from './glm';
 import type { Breach, Severity, BreachType } from './types';
 
 let client: bdclient | null = null;
@@ -114,6 +115,25 @@ export interface ScanProgressCallback {
   (stage: string, detail: string): void;
 }
 
+function parseSerpBody(body: string): DiscoverResultItem[] {
+  const items: DiscoverResultItem[] = [];
+  const blocks = body.split(/\n{2,}/);
+  for (const block of blocks) {
+    const lines = block.split('\n').filter(l => l.trim());
+    if (lines.length < 2) continue;
+    const titleLine = lines[0].replace(/^\d+\.\s*/, '').replace(/\*+/g, '').trim();
+    const descLines = lines.slice(1).join(' ').replace(/\*+/g, '').trim();
+    if (titleLine.length < 10) continue;
+    items.push({
+      title: titleLine.slice(0, 200),
+      description: descLines.slice(0, 500),
+      link: '',
+      relevance_score: 0.5,
+    });
+  }
+  return items.slice(0, 15);
+}
+
 export async function scanForBreachRelevance(onProgress?: ScanProgressCallback): Promise<Breach[]> {
   const c = getClient();
   const profile = await getProfile();
@@ -141,6 +161,14 @@ export async function scanForBreachRelevance(onProgress?: ScanProgressCallback):
     )
   );
 
+  onProgress?.('detect', 'running SERP news search for recent breaches...');
+  const serpResults = await Promise.allSettled([
+    c.search.google('data breach 2026 company hack ransomware', { format: 'json', dataFormat: 'markdown' }),
+    c.search.google('cybersecurity incident supply chain attack 2026', { format: 'json', dataFormat: 'markdown' }),
+  ]);
+
+  const candidateItems: { item: DiscoverResultItem; companyName: string }[] = [];
+
   for (const result of liveResults) {
     if (result.status !== 'fulfilled' || !result.value.success || !result.value.data) continue;
     for (const item of result.value.data) {
@@ -151,25 +179,76 @@ export async function scanForBreachRelevance(onProgress?: ScanProgressCallback):
         b => b.companyName.toLowerCase() === companyName.toLowerCase()
       ) || breaches.find(b => b.companyName.toLowerCase() === companyName.toLowerCase());
       if (existingBreach) continue;
-      if (breaches.length >= 10) break;
-
-      const company = getOrCreateCompany(companyName, `${companyName.toLowerCase().replace(/\s+/g, '')}.com`, 'Technology');
-      const breach: Breach = {
-        id: generateBreachId(),
-        title: item.title.length > 200 ? item.title.slice(0, 197) + '...' : item.title,
-        description: item.description.length > 500 ? item.description.slice(0, 497) + '...' : item.description,
-        severity: classifySeverity(item.description, item.title),
-        breachType: classifyBreachType(item.description, item.title),
-        detectedAt: new Date().toISOString(),
-        companyId: company.id,
-        companyName: company.name,
-        mappedNodesCount: 0,
-      };
-      addBreach(breach);
-      breaches.push(breach);
-      onProgress?.('detect', `found breach: ${companyName}`);
+      if (candidateItems.length >= 15) break;
+      if (!candidateItems.some(c => c.companyName.toLowerCase() === companyName.toLowerCase())) {
+        candidateItems.push({ item, companyName });
+      }
     }
+    if (candidateItems.length >= 15) break;
+  }
+
+  for (const result of serpResults) {
+    if (result.status !== 'fulfilled') continue;
+    const body = (result.value as { body?: string })?.body;
+    if (!body) continue;
+    const serpEntries = parseSerpBody(body);
+    for (const entry of serpEntries) {
+      const companyName = extractCompanyNameFromResult(entry);
+      if (!companyName) continue;
+      if (candidateItems.some(c => c.companyName.toLowerCase() === companyName.toLowerCase())) continue;
+      if (breaches.find(b => b.companyName.toLowerCase() === companyName.toLowerCase())) continue;
+      if (candidateItems.length >= 15) break;
+      candidateItems.push({ item: entry, companyName });
+    }
+  }
+
+  onProgress?.('detect', `extracting breach data with AI for ${candidateItems.length} candidates...`);
+
+  const aiResults = await Promise.allSettled(
+    candidateItems.map(async ({ item, companyName }) => {
+      const articleText = `TITLE: ${item.title}\n\n${item.description}`;
+      const extraction = await extractBreachData(articleText);
+      return { item, companyName, extraction };
+    })
+  );
+
+  for (const result of aiResults) {
+    if (result.status !== 'fulfilled') continue;
+    const { item, companyName: regexName, extraction } = result.value;
+    const companyName = extraction.companyName !== 'Unknown' ? extraction.companyName : regexName;
+    const existingBreach = breaches.find(b => b.companyName.toLowerCase() === companyName.toLowerCase());
+    if (existingBreach) continue;
     if (breaches.length >= 10) break;
+
+    const company = getOrCreateCompany(companyName, `${companyName.toLowerCase().replace(/\s+/g, '')}.com`, 'Technology');
+    const severity = (['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].includes(extraction.severity) ? extraction.severity : classifySeverity(item.description, item.title)) as Severity;
+    const breachType = ([ 'RANSOMWARE', 'CREDENTIAL_EXPOSURE', 'VULNERABILITY', 'THIRD_PARTY', 'INSIDER_THREAT', 'DATA_LEAK', 'DATA_EXFILTRATION', 'SUPPLY_CHAIN', 'ZERO_DAY', 'MISCONFIGURATION', 'CREDENTIAL_THEFT' ].includes(extraction.breachType) ? extraction.breachType : classifyBreachType(item.description, item.title)) as BreachType;
+
+    const breach: Breach = {
+      id: generateBreachId(),
+      title: item.title.length > 200 ? item.title.slice(0, 197) + '...' : item.title,
+      description: extraction.description || (item.description.length > 500 ? item.description.slice(0, 497) + '...' : item.description),
+      severity,
+      breachType,
+      detectedAt: new Date().toISOString(),
+      companyId: company.id,
+      companyName: company.name,
+      mappedNodesCount: 0,
+    };
+    addBreach(breach);
+    breaches.push(breach);
+
+    for (const vName of extraction.affectedVendors) {
+      if (vName.toLowerCase() === companyName.toLowerCase()) continue;
+      const vendor = getOrCreateVendor(vName, 'Cloud/SaaS');
+      addRelationship({
+        sourceCompanyId: company.id,
+        targetVendorId: vendor.id,
+        confidence: 0.9,
+        discoveredFrom: 'ai_extraction',
+      });
+    }
+    onProgress?.('detect', `found breach: ${companyName} (${severity}, ${extraction.affectedVendors.length} vendors)`);
   }
 
   return breaches;
@@ -273,6 +352,36 @@ export async function mapVendorNetwork(breach: Breach, onProgress?: ScanProgress
     }
   } catch (err) {
     console.error(`tech stack search failed for ${breach.companyName}:`, err);
+  }
+
+  try {
+    onProgress?.('map', `searching SERP for ${breach.companyName} technology vendors...`);
+    const serpResult = await c.search.google(`${breach.companyName} technology stack vendors partners`, {
+      format: 'json',
+      dataFormat: 'markdown',
+    });
+
+    if (serpResult && typeof serpResult === 'object' && 'body' in serpResult) {
+      const body = (serpResult as { body: string }).body;
+      const vendorNames = extractVendorNamesFromText(body);
+      for (const vName of vendorNames) {
+        if (vName.toLowerCase() === breach.companyName.toLowerCase()) continue;
+        const existing = getStore().relationships.find(
+          r => r.sourceCompanyId === breach.companyId && r.targetVendorId === getOrCreateVendor(vName, 'Cloud/SaaS').id
+        );
+        if (existing) continue;
+        const vendor = getOrCreateVendor(vName, 'Cloud/SaaS');
+        addRelationship({
+          sourceCompanyId: breach.companyId,
+          targetVendorId: vendor.id,
+          confidence: 0.6,
+          discoveredFrom: 'serp_search',
+        });
+        onProgress?.('map', `found vendor: ${vName} (via SERP)`);
+      }
+    }
+  } catch (err) {
+    console.error(`SERP vendor search failed for ${breach.companyName}:`, err);
   }
 }
 

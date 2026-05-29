@@ -217,28 +217,32 @@ export async function scanForBreachRelevance(onProgress?: ScanProgressCallback, 
   const aiResults = await Promise.allSettled(
     aiCandidates.map(async ({ item, companyName }) => {
       onProgress?.('detect', `analyzing: ${companyName}...`);
-      const articleText = `TITLE: ${item.title}\n\n${item.description}`;
-      const extraction = await extractBreachData(articleText);
-      return { item, companyName, extraction };
+      try {
+        const articleText = `TITLE: ${item.title}\n\n${item.description}`;
+        const extraction = await extractBreachData(articleText);
+        return { item, companyName, extraction, aiSuccess: true };
+      } catch {
+        return { item, companyName, extraction: null, aiSuccess: false };
+      }
     })
   );
 
   for (const result of aiResults) {
     if (result.status !== 'fulfilled') continue;
-    const { item, companyName: regexName, extraction } = result.value;
-    const companyName = extraction.companyName !== 'Unknown' ? extraction.companyName : regexName;
+    const { item, companyName: regexName, extraction, aiSuccess } = result.value;
+    const companyName = extraction?.companyName && extraction.companyName !== 'Unknown' ? extraction.companyName : regexName;
     const existingBreach = breaches.find(b => b.companyName.toLowerCase() === companyName.toLowerCase());
     if (existingBreach) continue;
     if (breaches.length >= 5) break;
 
     const company = getOrCreateCompany(companyName, `${companyName.toLowerCase().replace(/\s+/g, '')}.com`, 'Technology');
-    const severity = (['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].includes(extraction.severity) ? extraction.severity : classifySeverity(item.description, item.title)) as Severity;
-    const breachType = ([ 'RANSOMWARE', 'CREDENTIAL_EXPOSURE', 'VULNERABILITY', 'THIRD_PARTY', 'INSIDER_THREAT', 'DATA_LEAK', 'DATA_EXFILTRATION', 'SUPPLY_CHAIN', 'ZERO_DAY', 'MISCONFIGURATION', 'CREDENTIAL_THEFT' ].includes(extraction.breachType) ? extraction.breachType : classifyBreachType(item.description, item.title)) as BreachType;
+    const severity = (aiSuccess && extraction && ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].includes(extraction.severity) ? extraction.severity : classifySeverity(item.description, item.title)) as Severity;
+    const breachType = (aiSuccess && extraction && [ 'RANSOMWARE', 'CREDENTIAL_EXPOSURE', 'VULNERABILITY', 'THIRD_PARTY', 'INSIDER_THREAT', 'DATA_LEAK', 'DATA_EXFILTRATION', 'SUPPLY_CHAIN', 'ZERO_DAY', 'MISCONFIGURATION', 'CREDENTIAL_THEFT' ].includes(extraction.breachType) ? extraction.breachType : classifyBreachType(item.description, item.title)) as BreachType;
 
     const breach: Breach = {
       id: generateBreachId(),
       title: item.title.length > 200 ? item.title.slice(0, 197) + '...' : item.title,
-      description: extraction.description || (item.description.length > 500 ? item.description.slice(0, 497) + '...' : item.description),
+      description: (aiSuccess && extraction?.description) ? extraction.description : (item.description.length > 500 ? item.description.slice(0, 497) + '...' : item.description),
       severity,
       breachType,
       detectedAt: new Date().toISOString(),
@@ -249,17 +253,20 @@ export async function scanForBreachRelevance(onProgress?: ScanProgressCallback, 
     addBreach(breach);
     breaches.push(breach);
 
-    for (const vName of extraction.affectedVendors) {
-      if (vName.toLowerCase() === companyName.toLowerCase()) continue;
-      const vendor = getOrCreateVendor(vName, 'Cloud/SaaS');
-      addRelationship({
-        sourceCompanyId: company.id,
-        targetVendorId: vendor.id,
-        confidence: 0.9,
-        discoveredFrom: 'ai_extraction',
-      });
+    if (aiSuccess && extraction?.affectedVendors) {
+      for (const vName of extraction.affectedVendors) {
+        if (vName.toLowerCase() === companyName.toLowerCase()) continue;
+        const vendor = getOrCreateVendor(vName, 'Cloud/SaaS');
+        addRelationship({
+          sourceCompanyId: company.id,
+          targetVendorId: vendor.id,
+          confidence: 0.9,
+          discoveredFrom: 'ai_extraction',
+        });
+      }
     }
-    onProgress?.('detect', `found breach: ${companyName} (${severity}, ${extraction.affectedVendors.length} vendors)`);
+    const vendorCount = aiSuccess && extraction?.affectedVendors ? extraction.affectedVendors.length : 0;
+    onProgress?.('detect', `found breach: ${companyName} (${severity}${aiSuccess ? '' : ' [regex fallback]'}, ${vendorCount} vendors)`);
   }
 
   return breaches;

@@ -38,6 +38,9 @@ async function aimlChat(messages: ChatMessage[], temperature: number = 0.6, maxT
   const apiKey = process.env.AIML_API_KEY;
   if (!apiKey) throw new Error('AIML_API_KEY not configured');
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
   const response = await fetch(AIML_API_URL, {
     method: 'POST',
     headers: {
@@ -50,7 +53,8 @@ async function aimlChat(messages: ChatMessage[], temperature: number = 0.6, maxT
       temperature,
       max_tokens: maxTokens,
     }),
-  });
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeout));
 
   if (!response.ok) {
     const errorText = await response.text();

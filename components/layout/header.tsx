@@ -73,10 +73,6 @@ export function Header() {
       )}
 
       <div className="flex items-center gap-4">
-        <div className="hidden md:flex items-center gap-2 text-xs text-text-secondary">
-          <span className="w-2 h-2 rounded-full bg-accent-green" />
-          <span>bright_data_connected</span>
-        </div>
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setMenuOpen(!menuOpen)}

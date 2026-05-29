@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { cn } from '@/lib/utils';
 import { Crosshair } from 'lucide-react';
@@ -22,9 +22,15 @@ export function OriginNode({ data }: { data: any }) {
 }
 
 export function VendorNode({ data }: { data: any }) {
+  const [hovered, setHovered] = useState(false);
   return (
-    <div className="flex flex-col items-center justify-center p-3 bg-bg-surface border border-border-default rotate-45 transform w-20 h-20 transition-colors group-hover:border-text-secondary">
-      <div className="-rotate-45 flex flex-col items-center justify-center text-center">
+    <div
+      className="flex flex-col items-center justify-center p-3 bg-bg-surface transform w-20 h-20 transition-colors"
+      style={{ rotate: '45deg', borderColor: hovered ? 'var(--text-secondary)' : 'var(--border-default)', borderWidth: '1px', borderStyle: 'solid' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <div className="flex flex-col items-center justify-center text-center" style={{ rotate: '-45deg' }}>
         <span className="text-[10px] text-text-secondary">VD</span>
         <span className="text-xs text-text-primary mt-1">{data.label}</span>
       </div>

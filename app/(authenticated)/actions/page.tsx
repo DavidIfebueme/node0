@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { generateOutreach } from '@/lib/api';
 import { useStore } from '@/lib/store';
 import { TerminalButton } from '@/components/ui/terminal-button';
@@ -72,6 +72,24 @@ export default function ActionsPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleOpenEmail = () => {
+    if (!cached || !selectedProspect) return;
+    const subject = encodeURIComponent(cached.subject);
+    const body = encodeURIComponent(cached.body);
+    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+  };
+
+  const breachGroups = useMemo(() => {
+    const groups: Record<string, { breach: typeof breaches[0]; prospects: typeof prospects }> = {};
+    for (const p of prospects) {
+      const breach = breaches.find(b => b.id === p.breachId);
+      if (!breach) continue;
+      if (!groups[p.breachId]) groups[p.breachId] = { breach, prospects: [] };
+      groups[p.breachId].prospects.push(p);
+    }
+    return Object.values(groups);
+  }, [prospects, breaches]);
+
   const handleSelectProspect = (id: string) => {
     setSelectedProspectId(id);
     setError(null);
@@ -99,33 +117,43 @@ export default function ActionsPage() {
                 <div className="py-3 px-2 font-normal w-28">relevance</div>
                 <div className="py-3 px-2 font-normal flex-1">connections</div>
               </div>
-              {prospects.map(prospect => (
-                <div
-                  key={prospect.id}
-                  onClick={() => handleSelectProspect(prospect.id)}
-                  className={cn(
-                    "flex items-center border-b border-border-muted cursor-pointer hover:bg-bg-elevated transition-colors text-sm",
-                    (selectedProspect?.id === prospect.id) && "bg-bg-elevated border-l-2 border-l-accent-cyan"
-                  )}
-                >
-                  <div className="py-4 px-2 flex-1">
-                    <div className="font-bold text-text-primary">{prospect.companyName}</div>
-                    <div className="text-[10px] text-text-dim">[{prospect.priority}]</div>
+              {breachGroups.map(group => (
+                <React.Fragment key={group.breach.id}>
+                  <div className="flex items-center gap-2 py-2 px-2 bg-accent-red/5 border-b border-border-muted text-xs text-accent-red">
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent-red" />
+                    <span className="font-bold">{group.breach.companyName}</span>
+                    <span className="text-text-dim">— {group.breach.breachType.replace(/_/g, ' ').toLowerCase()}</span>
+                    <span className="text-text-dim ml-auto">{group.prospects.length} prospect{group.prospects.length !== 1 ? 's' : ''}</span>
                   </div>
-                  <div className="py-4 px-2 w-24 text-text-secondary">{prospect.industry}</div>
-                  <div className="py-4 px-2 w-28">
-                    <div className="flex items-center gap-2">
-                      <div className="text-accent-cyan">{Math.round(prospect.relevanceScore * 100)}%</div>
-                      <div className="w-16 h-1 bg-bg-primary">
-                        <div className="h-full bg-accent-cyan" style={{ width: `${prospect.relevanceScore * 100}%` }} />
+                  {group.prospects.map(prospect => (
+                    <div
+                      key={prospect.id}
+                      onClick={() => handleSelectProspect(prospect.id)}
+                      className={cn(
+                        "flex items-center border-b border-border-muted cursor-pointer hover:bg-bg-elevated transition-colors text-sm",
+                        (selectedProspect?.id === prospect.id) && "bg-bg-elevated border-l-2 border-l-accent-cyan"
+                      )}
+                    >
+                      <div className="py-4 px-2 flex-1">
+                        <div className="font-bold text-text-primary">{prospect.companyName}</div>
+                        <div className="text-[10px] text-text-dim">[{prospect.priority}]</div>
+                      </div>
+                      <div className="py-4 px-2 w-24 text-text-secondary">{prospect.industry}</div>
+                      <div className="py-4 px-2 w-28">
+                        <div className="flex items-center gap-2">
+                          <div className="text-accent-cyan">{Math.round(prospect.relevanceScore * 100)}%</div>
+                          <div className="w-16 h-1 bg-bg-primary">
+                            <div className="h-full bg-accent-cyan" style={{ width: `${prospect.relevanceScore * 100}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="py-4 px-2 flex-1 text-xs text-text-dim">
+                        <span className="text-text-secondary">{prospect.connectionPath[0]?.name}</span> →
+                        <span className="text-text-primary">{prospect.connectionPath[1]?.name}</span>
                       </div>
                     </div>
-                  </div>
-                  <div className="py-4 px-2 flex-1 text-xs text-text-dim">
-                    <span className="text-text-secondary">{prospect.connectionPath[0].name}</span> →
-                    <span className="text-text-primary">{prospect.connectionPath[1].name}</span>
-                  </div>
-                </div>
+                  ))}
+                </React.Fragment>
               ))}
             </div>
           )}
@@ -189,8 +217,8 @@ export default function ActionsPage() {
               <TerminalButton onClick={handleCopy} variant="ghost" className="px-2">
                 {copied ? <><Check size={14} className="text-accent-green" /> copied</> : <><Copy size={14} /> copy</>}
               </TerminalButton>
-              <TerminalButton onClick={handleCopy} variant="primary" className="flex-1">
-                <Send size={14} /> copy & send
+              <TerminalButton onClick={handleOpenEmail} variant="primary" className="flex-1">
+                <Send size={14} /> open in email
               </TerminalButton>
             </div>
           )}

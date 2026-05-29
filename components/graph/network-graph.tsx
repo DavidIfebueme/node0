@@ -34,7 +34,7 @@ function buildGraphFromStore(
   if (!breach) return FALLBACK_DATA;
 
   const nodes: Array<{ id: string; type: string; position: { x: number; y: number }; data: Record<string, string> }> = [];
-  const edges: Array<{ id: string; source: string; target: string; animated?: boolean }> = [];
+  const edges: Array<{ id: string; source: string; target: string; animated?: boolean; label?: string; style?: Record<string, string> }> = [];
 
   nodes.push({
     id: `breach-${breach.id}`,
@@ -66,7 +66,7 @@ function buildGraphFromStore(
       position: { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius },
       data: { label: vendorName },
     });
-    edges.push({ id: `edge-breach-${vendorName}`, source: `breach-${breach.id}`, target: vendorNodeId, animated: true });
+    edges.push({ id: `edge-breach-${vendorName}`, source: `breach-${breach.id}`, target: vendorNodeId, animated: true, label: 'uses', style: { stroke: '#ff3b30' } });
   }
 
   let pi = 0;
@@ -86,7 +86,7 @@ function buildGraphFromStore(
       position: { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius },
       data: { label: p.companyName },
     });
-    edges.push({ id: `edge-${vendorName}-${p.id}`, source: vendorNodeId, target: prospectNodeId, animated: true });
+    edges.push({ id: `edge-${vendorName}-${p.id}`, source: vendorNodeId, target: prospectNodeId, animated: true, label: 'exposed', style: { stroke: '#00e5ff' } });
   }
 
   return { nodes, edges };
@@ -142,8 +142,13 @@ export function NetworkGraph({ breachId }: { breachId: string }) {
       minZoom={0.2}
       maxZoom={2}
       className="bg-transparent"
+      defaultEdgeOptions={{ type: 'animated', style: { strokeWidth: 1.5 } }}
     >
       <Background color="#14141c" variant={BackgroundVariant.Dots} gap={20} size={1} className="opacity-50" />
+      <Controls
+        showInteractive={false}
+        className="!bg-bg-surface !border-border-default !rounded-none [&>button]:!bg-bg-surface [&>button]:!border-border-default [&>button]:!rounded-none [&>button]:!text-text-secondary [&>button:hover]:!bg-bg-elevated [&>button:hover]:!text-text-primary [&>svg]:!fill-text-secondary"
+      />
     </ReactFlow>
   );
 }

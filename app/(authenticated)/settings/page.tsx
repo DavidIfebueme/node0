@@ -13,16 +13,18 @@ export default function SettingsPage() {
   const [newTargetDomain, setNewTargetDomain] = useState('');
   const [newTargetIndustry, setNewTargetIndustry] = useState('');
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     getProfile().then(p => {
       setProfile(p);
       setCompanyName(p.companyName);
       setIndustry(p.industry);
-    }).catch(console.error);
+    }).catch(err => setError('failed to load profile'));
   }, []);
 
   const handleSaveProfile = () => {
+    setError('');
     fetch('/api/profile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -90,6 +92,9 @@ export default function SettingsPage() {
                 {saved ? <><CheckCircle size={14} className="text-accent-green" /> saved</> : 'save profile'}
               </TerminalButton>
             </div>
+            {error && (
+              <div className="text-accent-red text-xs bg-accent-red/5 border border-accent-red/20 p-2">{error}</div>
+            )}
           </div>
         </section>
 

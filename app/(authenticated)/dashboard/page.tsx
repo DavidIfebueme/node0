@@ -85,6 +85,10 @@ export default function Dashboard() {
   const filteredBreaches = breaches.filter(b => {
     if (filter === 'critical') return b.severity === 'CRITICAL';
     if (filter === 'high') return b.severity === 'HIGH' || b.severity === 'CRITICAL';
+    if (filter === 'this week') {
+      const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      return new Date(b.detectedAt).getTime() >= weekAgo;
+    }
     return true;
   });
 

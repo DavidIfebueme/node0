@@ -115,7 +115,55 @@ export interface ScanProgressCallback {
   (stage: string, detail: string): void;
 }
 
-function parseSerpBody(body: string): DiscoverResultItem[] {
+const REPORT_PATTERNS = [
+  /cost of a data breach/i,
+  /threat landscape report/i,
+  /global threat report/i,
+  /annual security report/i,
+  /cybersecurity report/i,
+  /security report\s+\d{4}/i,
+  /state of .*(security|cyber|threat)/i,
+  /trends? report/i,
+  /industry report/i,
+  /research report/i,
+  /market report/i,
+  /insights? report/i,
+  /intelligence report/i,
+  /\breport\b.*\breveals?\b/i,
+  /\breveals?\b.*\breport\b/i,
+  /top\s+\d+\s+(data breach|cyber|security|threat)/i,
+  /best practices/i,
+  /whitepaper/i,
+  /white paper/i,
+  /e-?book/i,
+  /webinar/i,
+  /survey\s+(of|find|result)/i,
+  /statistics/i,
+  /infographic/i,
+];
+
+const REPORT_KEYWORDS = new Set([
+  'report', 'reports', 'research', 'study', 'survey', 'analysis',
+  'whitepaper', 'overview', 'guide', 'handbook', 'framework',
+  'statistics', 'benchmark', 'index', 'ranking', 'scorecard',
+  'outlook', 'forecast', 'predictions', 'trends', 'insights',
+]);
+
+function isReportNotBreach(title: string, description: string): boolean {
+  const text = `${title} ${description}`;
+  for (const pattern of REPORT_PATTERNS) {
+    if (pattern.test(text)) return true;
+  }
+  const words = text.toLowerCase().split(/\s+/);
+  let reportHits = 0;
+  for (const w of words) {
+    if (REPORT_KEYWORDS.has(w)) reportHits++;
+  }
+  if (reportHits >= 2) return true;
+  return false;
+}
+
+function parseSerpBodyRaw(body: string): DiscoverResultItem[] {
   const items: DiscoverResultItem[] = [];
   const blocks = body.split(/\n{2,}/);
   for (const block of blocks) {
@@ -132,6 +180,12 @@ function parseSerpBody(body: string): DiscoverResultItem[] {
     });
   }
   return items.slice(0, 15);
+}
+
+function parseSerpBody(body: string): DiscoverResultItem[] {
+  return parseSerpBodyRaw(body).filter(
+    item => !isReportNotBreach(item.title, item.description)
+  );
 }
 
 export async function scanForBreachRelevance(onProgress?: ScanProgressCallback, targetIds?: string[] | null): Promise<Breach[]> {
@@ -182,6 +236,7 @@ export async function scanForBreachRelevance(onProgress?: ScanProgressCallback, 
     if (result.status !== 'fulfilled' || !result.value.success || !result.value.data) continue;
     for (const item of result.value.data) {
       if (item.relevance_score < 0.25) continue;
+      if (isReportNotBreach(item.title, item.description)) continue;
       const companyName = extractCompanyNameFromResult(item);
       if (!companyName) continue;
       const existingBreach = Array.from(getStore().breaches.values()).find(
@@ -204,6 +259,7 @@ export async function scanForBreachRelevance(onProgress?: ScanProgressCallback, 
     for (const entry of serpEntries) {
       const companyName = extractCompanyNameFromResult(entry);
       if (!companyName) continue;
+      if (isReportNotBreach(entry.title, entry.description)) continue;
       if (candidateItems.some(c => c.companyName.toLowerCase() === companyName.toLowerCase())) continue;
       if (breaches.find(b => b.companyName.toLowerCase() === companyName.toLowerCase())) continue;
       if (candidateItems.length >= 8) break;
@@ -231,6 +287,11 @@ export async function scanForBreachRelevance(onProgress?: ScanProgressCallback, 
     if (result.status !== 'fulfilled') continue;
     const { item, companyName: regexName, extraction, aiSuccess } = result.value;
     const companyName = extraction?.companyName && extraction.companyName !== 'Unknown' ? extraction.companyName : regexName;
+    const breachDescription = (aiSuccess && extraction?.description) ? extraction.description : item.description;
+    if (isReportNotBreach(item.title, breachDescription)) {
+      onProgress?.('detect', `skipped: ${companyName} (report/research, not a breach)`);
+      continue;
+    }
     const existingBreach = breaches.find(b => b.companyName.toLowerCase() === companyName.toLowerCase());
     if (existingBreach) continue;
     if (breaches.length >= 5) break;
@@ -463,6 +524,46 @@ export async function findCompaniesUsingVendor(vendorId: string, onProgress?: Sc
     }
   } catch (err) {
     console.error(`findCompaniesUsingVendor failed for ${vendor.name}:`, err);
+  }
+}
+
+export async function enrichCompanyWithLinkedIn(companyName: string, companyDomain: string, onProgress?: ScanProgressCallback): Promise<{ employeeCount?: string; industry?: string; description?: string } | null> {
+  const c = getClient();
+  try {
+    const searchUrl = `https://www.linkedin.com/company/${companyName.toLowerCase().replace(/\s+/g, '-')}`;
+    onProgress?.('enrich', `enriching ${companyName} via LinkedIn (Web Scraper)...`);
+    
+    const result = await c.scrape.linkedin.companies([searchUrl], {
+      pollTimeout: 15000,
+      pollInterval: 3000,
+    });
+
+    if (!result.success || !result.data || !Array.isArray(result.data) || result.data.length === 0) {
+      onProgress?.('enrich', `LinkedIn enrichment for ${companyName} unavailable — continuing`);
+      return null;
+    }
+
+    const companyData = result.data[0] as Record<string, unknown>;
+    const enriched: { employeeCount?: string; industry?: string; description?: string } = {};
+    
+    if (companyData.employee_count) enriched.employeeCount = String(companyData.employee_count);
+    if (companyData.industries) enriched.industry = String(companyData.industries);
+    if (companyData.description) enriched.description = String(companyData.description).slice(0, 300);
+    if (companyData.company_size) enriched.employeeCount = String(companyData.company_size);
+    if (companyData.organization_type) enriched.industry = String(companyData.organization_type);
+
+    if (Object.keys(enriched).length > 0) {
+      const company = getOrCreateCompany(companyName, companyDomain, enriched.industry || 'Technology');
+      if (enriched.employeeCount) company.employeeCount = enriched.employeeCount;
+      if (enriched.description) company.linkedInDescription = enriched.description;
+      onProgress?.('enrich', `enriched ${companyName} with LinkedIn data (${enriched.employeeCount || 'no employee count'})`);
+      return enriched;
+    }
+    
+    return null;
+  } catch (err) {
+    onProgress?.('enrich', `LinkedIn enrichment for ${companyName} timed out — continuing`);
+    return null;
   }
 }
 

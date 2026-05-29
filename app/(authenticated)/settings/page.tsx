@@ -149,16 +149,61 @@ export default function SettingsPage() {
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
       const lines = text.split('\n').filter(l => l.trim());
-      const hasHeader = lines[0]?.toLowerCase().includes('name') || lines[0]?.toLowerCase().includes('company');
+      if (lines.length === 0) {
+        setCsvStatus('error');
+        setError('csv file is empty');
+        return;
+      }
+
+      const headerLine = lines[0].toLowerCase();
+      const headerCols = headerLine.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+
+      const CRM_NAME_KEYS = ['company', 'company name', 'organization', 'account name', 'account', 'business name', 'firm', 'employer'];
+      const CRM_DOMAIN_KEYS = ['website', 'domain', 'url', 'web url', 'company website', 'site'];
+      const CRM_INDUSTRY_KEYS = ['industry', 'type', 'sector', 'category', 'business type'];
+      const CRM_EMAIL_KEYS = ['email', 'e-mail', 'email address', 'work email'];
+
+      function findColIndex(keys: string[]): number {
+        for (const key of keys) {
+          const idx = headerCols.findIndex(h => h === key || h.startsWith(key));
+          if (idx !== -1) return idx;
+        }
+        return -1;
+      }
+
+      const nameIdx = findColIndex(CRM_NAME_KEYS);
+      const domainIdx = findColIndex(CRM_DOMAIN_KEYS);
+      const industryIdx = findColIndex(CRM_INDUSTRY_KEYS);
+      const emailIdx = findColIndex(CRM_EMAIL_KEYS);
+
+      const hasHeader = nameIdx !== -1 || headerCols.some(h => CRM_NAME_KEYS.includes(h) || CRM_DOMAIN_KEYS.includes(h) || CRM_INDUSTRY_KEYS.includes(h));
       const dataLines = hasHeader ? lines.slice(1) : lines;
+
+      function extractDomain(raw: string, email: string): string {
+        if (raw && raw.trim()) {
+          let d = raw.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
+          return d;
+        }
+        if (email && email.includes('@')) {
+          return email.split('@')[1];
+        }
+        return '';
+      }
+
       const targets = dataLines.map(line => {
         const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+        const name = nameIdx !== -1 ? cols[nameIdx] || '' : cols[0] || '';
+        const rawDomain = domainIdx !== -1 ? cols[domainIdx] || '' : cols[1] || '';
+        const rawEmail = emailIdx !== -1 ? cols[emailIdx] || '' : '';
+        const rawIndustry = industryIdx !== -1 ? cols[industryIdx] || '' : cols[2] || '';
+        const domain = extractDomain(rawDomain, rawEmail) || `${name.toLowerCase().replace(/\s+/g, '')}.com`;
         return {
-          name: cols[0] || '',
-          domain: cols[1] || `${(cols[0] || '').toLowerCase().replace(/\s+/g, '')}.com`,
-          industry: cols[2] || 'Technology',
+          name,
+          domain,
+          industry: rawIndustry || 'Technology',
         };
       }).filter(t => t.name.length > 1);
+
       if (targets.length === 0) {
         setCsvStatus('error');
         setError('no valid rows found in csv');

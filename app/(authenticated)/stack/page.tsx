@@ -6,9 +6,10 @@ const stackLayers = [
   {
     label: 'data acquisition',
     items: [
-      { name: 'bright data discover', desc: 'real-time breach and security incident discovery via web data engine', tag: 'BRIGHT_DATA' },
-      { name: 'bright data web unlocker', desc: 'privacy policy and public document scraping for vendor mapping', tag: 'BRIGHT_DATA' },
+      { name: 'bright data discover', desc: 'real-time breach and security incident discovery via ai-powered web data engine', tag: 'BRIGHT_DATA' },
+      { name: 'bright data web unlocker', desc: 'anti-bot bypass for privacy policy scraping and public document access', tag: 'BRIGHT_DATA' },
       { name: 'bright data serp api', desc: 'google search with tbm=nws for targeted breach news queries', tag: 'BRIGHT_DATA' },
+      { name: 'bright data web scraper — linkedin', desc: 'linkedin company data enrichment — employee count, industry, description for breached companies', tag: 'BRIGHT_DATA' },
     ],
   },
   {
@@ -21,7 +22,7 @@ const stackLayers = [
   {
     label: 'persistence & auth',
     items: [
-      { name: 'turso (libsql)', desc: 'edge-deployed sqlite — users, target accounts, hubspot tokens, saved outreach', tag: 'TURSO' },
+      { name: 'turso (libsql)', desc: 'edge-deployed sqlite — users, target accounts, hubspot tokens, saved outreach, scan history', tag: 'TURSO' },
       { name: 'next-auth v5', desc: 'jwt-based credentials auth with turso-backed user store', tag: 'NEXTAUTH' },
     ],
   },
@@ -34,7 +35,7 @@ const stackLayers = [
     ],
   },
   {
-    label: 'deployment',
+    label: 'deployment & integrations',
     items: [
       { name: 'vercel', desc: 'serverless deployment with edge-optimized api routes', tag: 'VERCEL' },
       { name: 'hubspot crm', desc: 'oauth integration for contact sync and deal pipeline', tag: 'HUBSPOT' },
@@ -43,11 +44,12 @@ const stackLayers = [
 ];
 
 const dataFlow = [
-  { step: '01', label: 'discover', desc: 'bright data discovers breach incidents from across the web in real-time' },
+  { step: '01', label: 'discover', desc: 'bright data discover + serp api find breach incidents from across the web in real-time' },
   { step: '02', label: 'extract', desc: 'glm-4.5-air extracts structured breach data — company, type, severity, affected vendors' },
-  { step: '03', label: 'map', desc: 'privacy policy scraping + ai extraction maps the vendor network around each breach' },
-  { step: '04', label: 'trace', desc: 'blast radius analysis traces which target accounts share vendors with breached companies' },
-  { step: '05', label: 'engage', desc: 'glm-4.5-air generates targeted outreach emails with breach-specific context' },
+  { step: '03', label: 'enrich', desc: 'linkedin web scraper enriches breached companies with employee count, industry, and description' },
+  { step: '04', label: 'map', desc: 'web unlocker scrapes privacy policies + ai extraction maps the vendor network around each breach' },
+  { step: '05', label: 'trace', desc: 'blast radius analysis traces which target accounts share vendors with breached companies' },
+  { step: '06', label: 'engage', desc: 'glm-4.5-air generates targeted outreach emails with breach-specific context' },
 ];
 
 export default function StackPage() {

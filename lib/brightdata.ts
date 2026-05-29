@@ -134,10 +134,14 @@ function parseSerpBody(body: string): DiscoverResultItem[] {
   return items.slice(0, 15);
 }
 
-export async function scanForBreachRelevance(onProgress?: ScanProgressCallback): Promise<Breach[]> {
+export async function scanForBreachRelevance(onProgress?: ScanProgressCallback, targetIds?: string[] | null): Promise<Breach[]> {
   const c = getClient();
   const profile = await getProfile();
-  const targets = await getTargetAccounts();
+  let targets = await getTargetAccounts();
+
+  if (targetIds && targetIds.length > 0) {
+    targets = targets.filter(t => targetIds.includes(t.id));
+  }
   const breaches: Breach[] = [];
 
   onProgress?.('detect', `scanning for breaches relevant to ${profile.companyName}'s ${targets.length} target accounts...`);

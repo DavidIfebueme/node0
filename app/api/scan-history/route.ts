@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { getTurso } from '@/lib/turso';
+import { getTurso, initDb } from '@/lib/turso';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,6 +11,9 @@ export async function GET() {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
+  try {
+    await initDb();
+  } catch {}
   const turso = getTurso();
   const result = await turso.execute({
     sql: "SELECT id, status, breaches_found, vendors_mapped, prospects_identified, started_at, completed_at FROM scan_history WHERE user_id = ? ORDER BY started_at DESC LIMIT 20",
@@ -40,6 +43,9 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { status, breachesFound, vendorsMapped, prospectsIdentified, startedAt, completedAt } = body;
 
+  try {
+    await initDb();
+  } catch {}
   const turso = getTurso();
   const id = `scan-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 

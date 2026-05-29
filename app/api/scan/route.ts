@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { scanForBreachRelevance, mapVendorNetwork, findCompaniesUsingVendor, identifyProspects } from '@/lib/brightdata';
 import { getStore, startScan, completeScan, resetStore, getProfile, getTargetAccounts } from '@/lib/server-store';
+import type { Breach } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -78,23 +79,47 @@ export async function POST(req: NextRequest) {
     resetStore();
     startScan();
     const scanStartedAt = new Date().toISOString();
+    const targetIds: string[] | null = body.targetIds || null;
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
         const send = (event: string, data: Record<string, unknown>) => {
-          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+          try {
+            controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+          } catch {}
         };
 
+        let heartbeat: NodeJS.Timeout | null = null;
+        heartbeat = setInterval(() => {
+          send('heartbeat', { ts: Date.now() });
+        }, 5000);
+
+        const stopHeartbeat = () => { if (heartbeat) clearInterval(heartbeat); };
+
         try {
+          send('progress', { message: 'initializing scan...', progress: 2 });
+
           const profile = await getProfile();
           const targets = await getTargetAccounts();
           send('progress', { message: `scanning for breaches affecting ${profile.companyName}'s ${targets.length} targets...`, progress: 5 });
 
-          const breaches = await scanForBreachRelevance((stage, detail) => {
-            const pct = stage === 'detect' ? Math.min(20, 5 + Math.random() * 10) : 15;
-            send('progress', { message: detail, progress: Math.round(pct) });
-          });
+          let breaches: Breach[] = [];
+          try {
+            breaches = await scanForBreachRelevance((stage, detail) => {
+              const pct = stage === 'detect' ? Math.min(20, 5 + Math.random() * 10) : 15;
+              send('progress', { message: detail, progress: Math.round(pct) });
+            }, targetIds);
+          } catch (err) {
+            send('progress', { message: 'discovery phase partially failed, using available results...', progress: 20 });
+          }
+
+          if (breaches.length === 0) {
+            send('progress', { message: 'no breaches found — try adjusting targets or scan again later', progress: 100 });
+            stopHeartbeat();
+            controller.close();
+            return;
+          }
 
           send('progress', { message: `found ${breaches.length} breaches`, progress: 25 });
 
@@ -106,22 +131,30 @@ export async function POST(req: NextRequest) {
 
             send('progress', { message: `mapping ${breach.companyName} vendor network...`, progress: baseProgress + 5 });
 
-            await mapVendorNetwork(breach, (stage, detail) => {
-              send('progress', { message: detail, progress: baseProgress + 10 });
-            });
+            try {
+              await mapVendorNetwork(breach, (stage, detail) => {
+                send('progress', { message: detail, progress: baseProgress + 10 });
+              });
+            } catch {
+              send('progress', { message: `vendor mapping for ${breach.companyName} partially failed`, progress: baseProgress + 10 });
+            }
 
             const vendorRels = getStore().relationships.filter(r => r.sourceCompanyId === breach.companyId);
             const uniqueVendorIds = [...new Set(vendorRels.map(r => r.targetVendorId))].slice(0, 2);
 
             for (const vendorId of uniqueVendorIds) {
-              await findCompaniesUsingVendor(vendorId, (stage, detail) => {
-                send('progress', { message: detail, progress: baseProgress + 20 });
-              });
+              try {
+                await findCompaniesUsingVendor(vendorId, (stage, detail) => {
+                  send('progress', { message: detail, progress: baseProgress + 20 });
+                });
+              } catch {}
             }
 
-            await identifyProspects(breach.id, (stage, detail) => {
-              send('progress', { message: detail, progress: baseProgress + 25 });
-            });
+            try {
+              await identifyProspects(breach.id, (stage, detail) => {
+                send('progress', { message: detail, progress: baseProgress + 25 });
+              });
+            } catch {}
 
             const mappedNodes = getStore().relationships.filter(r => r.sourceCompanyId === breach.companyId).length;
             const storedBreach = getStore().breaches.get(breach.id);
@@ -175,6 +208,7 @@ export async function POST(req: NextRequest) {
         } catch (err) {
           send('error', { message: err instanceof Error ? err.message : 'scan failed' });
         } finally {
+          stopHeartbeat();
           controller.close();
         }
       },

@@ -5,7 +5,7 @@ import { BreachCard } from '@/components/radar/breach-card';
 import { MonospaceStat } from '@/components/ui/monospace-stat';
 import { TerminalButton } from '@/components/ui/terminal-button';
 import { useStore } from '@/lib/store';
-import { Search, History } from 'lucide-react';
+import { Search, History, Filter } from 'lucide-react';
 import { ScanProgress } from '@/components/radar/scan-progress';
 import type { Breach, Prospect } from '@/lib/types';
 
@@ -19,9 +19,16 @@ export default function Dashboard() {
     prospectsIdentified: number; startedAt: string; completedAt: string | null;
   }>>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [showTargetPicker, setShowTargetPicker] = useState(false);
+  const [availableTargets, setAvailableTargets] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedTargetIds, setSelectedTargetIds] = useState<Set<string>>(new Set());
+  const [scanAll, setScanAll] = useState(true);
 
   useEffect(() => {
-    fetch('/api/profile').then(r => r.json()).then(d => setTargetCount(d.targetCount || 0)).catch(() => {});
+    fetch('/api/profile').then(r => r.json()).then(d => {
+      setTargetCount(d.targetCount || 0);
+      if (d.targets) setAvailableTargets(d.targets.map((t: { id: string; name: string }) => ({ id: t.id, name: t.name })));
+    }).catch(() => {});
     fetch('/api/scan-history').then(r => r.json()).then(d => setScanHistory(d.scans || [])).catch(() => {});
   }, []);
 
@@ -38,7 +45,10 @@ export default function Dashboard() {
       const res = await fetch('/api/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ step: 'full' }),
+        body: JSON.stringify({
+          step: 'full',
+          targetIds: scanAll ? null : Array.from(selectedTargetIds),
+        }),
       });
 
       if (!res.ok || !res.body) throw new Error('scan request failed');
@@ -66,6 +76,8 @@ export default function Dashboard() {
               if (currentEvent === 'progress') {
                 if (data.progress > 0) setScanProgress(Math.min(data.progress, 100));
                 if (data.message) log(data.message);
+              } else if (currentEvent === 'heartbeat') {
+                // keep connection alive
               } else if (currentEvent === 'breach') {
                 if (data.breach) {
                   addBreach(data.breach as Breach);
@@ -159,26 +171,73 @@ export default function Dashboard() {
         )}
       </div>
 
-      <div className="mt-auto pt-4 border-t border-border-default flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-4 w-full md:w-auto">
-          <TerminalButton onClick={handleScan} className="w-full md:w-auto">
-            <Search size={14} />
-            {isScanning ? 'scanning...' : '+ initiate scan'}
-          </TerminalButton>
-          <ScanProgress progress={scanProgress} isScanning={isScanning} />
+      <div className="mt-auto pt-4 border-t border-border-default flex flex-col gap-3">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4 w-full md:w-auto">
+            <TerminalButton onClick={handleScan} className="w-full md:w-auto">
+              <Search size={14} />
+              {isScanning ? 'scanning...' : '+ initiate scan'}
+            </TerminalButton>
+            <ScanProgress progress={scanProgress} isScanning={isScanning} />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setShowTargetPicker(!showTargetPicker); setScanAll(true); }}
+              className={`flex items-center gap-1 font-mono text-xs px-3 py-1 border transition-colors ${showTargetPicker ? 'border-text-secondary text-text-primary bg-bg-elevated' : 'border-border-muted text-text-secondary hover:border-border-default'}`}
+            >
+              <Filter size={11} /> targets: {scanAll ? 'all' : selectedTargetIds.size}
+            </button>
+            {['all', 'critical', 'high', 'this week'].map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`font-mono text-xs px-3 py-1 border transition-colors ${filter === f ? 'border-text-secondary text-text-primary bg-bg-elevated' : 'border-border-muted text-text-secondary hover:border-border-default'}`}
+              >
+                [{f}]
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {['all', 'critical', 'high', 'this week'].map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`font-mono text-xs px-3 py-1 border transition-colors ${filter === f ? 'border-text-secondary text-text-primary bg-bg-elevated' : 'border-border-muted text-text-secondary hover:border-border-default'}`}
-            >
-              [{f}]
-            </button>
-          ))}
-        </div>
+        {showTargetPicker && availableTargets.length > 0 && (
+          <div className="border border-border-default bg-bg-surface p-3 max-h-40 overflow-y-auto hide-scrollbar">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] text-text-dim">select targets for next scan</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setScanAll(true); setSelectedTargetIds(new Set()); }}
+                  className={`text-[10px] px-2 py-0.5 border transition-colors ${scanAll ? 'border-accent-cyan text-accent-cyan' : 'border-border-muted text-text-dim hover:text-text-secondary'}`}
+                >
+                  all
+                </button>
+                <button
+                  onClick={() => setScanAll(false)}
+                  className={`text-[10px] px-2 py-0.5 border transition-colors ${!scanAll ? 'border-accent-cyan text-accent-cyan' : 'border-border-muted text-text-dim hover:text-text-secondary'}`}
+                >
+                  custom
+                </button>
+              </div>
+            </div>
+            {!scanAll && (
+              <div className="flex flex-wrap gap-1.5">
+                {availableTargets.map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => {
+                      const next = new Set(selectedTargetIds);
+                      if (next.has(t.id)) next.delete(t.id); else next.add(t.id);
+                      setSelectedTargetIds(next);
+                    }}
+                    className={`text-[10px] px-2 py-0.5 border transition-colors ${selectedTargetIds.has(t.id) ? 'border-accent-cyan text-accent-cyan bg-accent-cyan/5' : 'border-border-muted text-text-dim hover:text-text-secondary'}`}
+                  >
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {scanHistory.length > 0 && (

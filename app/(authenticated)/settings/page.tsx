@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getProfile } from '@/lib/api';
 import { TerminalButton } from '@/components/ui/terminal-button';
-import { CheckCircle, Building2, Target, Shield, Zap } from 'lucide-react';
+import { CheckCircle, Building2, Target, Shield, Zap, Upload, Link2 } from 'lucide-react';
 
 export default function SettingsPage() {
   const [profile, setProfile] = useState<{ companyName: string; industry: string; targetCount: number; targets: Array<{ id: string; name: string; domain: string; industry: string }> } | null>(null);
@@ -14,6 +14,9 @@ export default function SettingsPage() {
   const [newTargetIndustry, setNewTargetIndustry] = useState('');
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  const [csvStatus, setCsvStatus] = useState<'idle' | 'parsing' | 'done' | 'error'>('idle');
+  const [hubspotConnected, setHubspotConnected] = useState(false);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getProfile().then(p => {
@@ -21,6 +24,13 @@ export default function SettingsPage() {
       setCompanyName(p.companyName);
       setIndustry(p.industry);
     }).catch(err => setError('failed to load profile'));
+
+    fetch('/api/crm/hubspot/status').then(r => r.json()).then(d => setHubspotConnected(d.connected)).catch(() => {});
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('hubspot') === 'connected') setHubspotConnected(true);
+    if (params.get('hubspot') === 'error') setError('hubspot connection failed');
+    if (params.get('hubspot')) window.history.replaceState({}, '', '/settings');
   }, []);
 
   const handleSaveProfile = () => {
@@ -53,6 +63,52 @@ export default function SettingsPage() {
       setNewTargetDomain('');
       setNewTargetIndustry('');
     }).catch(console.error);
+  };
+
+  const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith('.csv')) {
+      setCsvStatus('error');
+      setError('please upload a .csv file');
+      return;
+    }
+    setCsvStatus('parsing');
+    setError('');
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const lines = text.split('\n').filter(l => l.trim());
+      const hasHeader = lines[0]?.toLowerCase().includes('name') || lines[0]?.toLowerCase().includes('company');
+      const dataLines = hasHeader ? lines.slice(1) : lines;
+      const targets = dataLines.map(line => {
+        const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+        return {
+          name: cols[0] || '',
+          domain: cols[1] || `${(cols[0] || '').toLowerCase().replace(/\s+/g, '')}.com`,
+          industry: cols[2] || 'Technology',
+        };
+      }).filter(t => t.name.length > 1);
+      if (targets.length === 0) {
+        setCsvStatus('error');
+        setError('no valid rows found in csv');
+        return;
+      }
+      fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csvTargets: targets }),
+      }).then(() => {
+        setCsvStatus('done');
+        getProfile().then(p => setProfile(p));
+        setTimeout(() => setCsvStatus('idle'), 3000);
+      }).catch(() => {
+        setCsvStatus('error');
+        setError('failed to upload csv targets');
+      });
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   return (
@@ -165,6 +221,25 @@ export default function SettingsPage() {
               </TerminalButton>
             </div>
           </div>
+
+          <div className="border border-border-dashed border-dashed p-4">
+            <div className="text-xs text-text-dim mb-3">bulk import via csv</div>
+            <div className="text-[10px] text-text-dim mb-2">format: name,domain,industry (one per row, header row optional)</div>
+            <div className="flex items-center gap-3">
+              <input
+                ref={csvInputRef}
+                type="file"
+                accept=".csv"
+                onChange={handleCsvUpload}
+                className="hidden"
+              />
+              <TerminalButton onClick={() => csvInputRef.current?.click()} variant="ghost">
+                <Upload size={14} /> {csvStatus === 'parsing' ? 'uploading...' : csvStatus === 'done' ? 'uploaded!' : csvStatus === 'error' ? 'error' : 'choose csv'}
+              </TerminalButton>
+              {csvStatus === 'done' && <span className="text-xs text-accent-green">targets imported</span>}
+              {csvStatus === 'error' && <span className="text-xs text-accent-red">upload failed</span>}
+            </div>
+          </div>
         </section>
 
         <section className="bg-bg-surface border border-border-default p-5">
@@ -173,9 +248,10 @@ export default function SettingsPage() {
           </div>
           <div className="flex flex-col gap-3">
             {[
-              { label: 'Bright Data SERP API — real-time breach search', active: true },
+              { label: 'Bright Data Discover — ai-powered breach discovery', active: true },
+              { label: 'Bright Data SERP API — google news search', active: true },
               { label: 'Web Unlocker — privacy policy & vendor page scraping', active: true },
-              { label: 'Known Breach Intelligence — pre-mapped vendor networks', active: true },
+              { label: 'AI Extraction — structured breach + vendor data from articles', active: true },
               { label: 'Vendor Customer Discovery — shared vendor tracing', active: true },
             ].map((src, i) => (
               <div key={i} className="flex items-center justify-between">
@@ -188,16 +264,41 @@ export default function SettingsPage() {
 
         <section className="bg-bg-surface border border-border-default p-5">
           <div className="flex items-center gap-2 text-xs text-text-dim mb-4 border-b border-border-muted pb-2">
+            <Link2 size={14} /> //// hubspot crm
+          </div>
+          <div className="flex flex-col gap-3">
+            <div className="text-xs text-text-dim mb-1">connect hubspot to sync contacts and push outreach directly to your crm pipeline</div>
+            {hubspotConnected ? (
+              <div className="flex items-center gap-2 text-xs text-accent-green">
+                <CheckCircle size={14} /> hubspot connected
+              </div>
+            ) : (
+              <TerminalButton
+                onClick={() => window.location.href = '/api/crm/hubspot/install'}
+                variant="primary"
+              >
+                <Link2 size={14} /> connect hubspot
+              </TerminalButton>
+            )}
+          </div>
+        </section>
+
+        <section className="bg-bg-surface border border-border-default p-5">
+          <div className="flex items-center gap-2 text-xs text-text-dim mb-4 border-b border-border-muted pb-2">
             <Zap size={14} /> //// ai outreach engine
           </div>
           <div className="flex flex-col gap-4">
             <div className="flex items-center gap-2 text-xs text-text-secondary">
               <span>model:</span>
-              <span className="text-text-primary">glm-4-plus</span>
+              <span className="text-text-primary">glm-4.5-air</span>
             </div>
             <div className="flex items-center gap-2 text-xs text-text-secondary">
               <span>provider:</span>
-              <span className="text-text-primary">zai</span>
+              <span className="text-text-primary">aiml api</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-text-secondary">
+              <span>capabilities:</span>
+              <span className="text-text-primary">structured extraction + outreach generation</span>
             </div>
             <div className="flex items-center gap-2 text-xs text-accent-green">
               <CheckCircle size={14} /> outreach generation active

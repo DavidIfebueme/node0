@@ -8,3 +8,4 @@ coverage/
 *.md
 !README.md
 next-env.d.ts
+tsconfig.tsbuildinfo

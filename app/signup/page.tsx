@@ -52,9 +52,10 @@ export default function SignupPage() {
       });
 
       if (result?.error) {
-        setError('account created but login failed. try signing in manually.');
+        setError('account created but login failed. try logging in manually.');
+        setTimeout(() => window.location.href = '/login', 1500);
       } else {
-        router.push('/dashboard');
+        window.location.href = '/dashboard';
       }
     } catch {
       setError('initialization failed. try again.');

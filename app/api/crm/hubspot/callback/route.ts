@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
 import { getTurso, initDb } from '@/lib/turso';
 
 export const dynamic = 'force-dynamic';
@@ -7,6 +8,12 @@ export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get('code');
   if (!code) {
     return NextResponse.redirect(new URL('/settings?hubspot=error', req.url));
+  }
+
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) {
+    return NextResponse.redirect(new URL('/login', req.url));
   }
 
   const clientId = process.env.HUBSPOT_CLIENT_ID;
@@ -44,18 +51,18 @@ export async function GET(req: NextRequest) {
 
     const existing = await turso.execute({
       sql: "SELECT id FROM hubspot_tokens WHERE user_id = ?",
-      args: ['1'],
+      args: [userId],
     });
 
     if (existing.rows.length > 0) {
       await turso.execute({
         sql: "UPDATE hubspot_tokens SET access_token = ?, refresh_token = ?, expires_at = ?, hub_id = ? WHERE user_id = ?",
-        args: [access_token, refresh_token, Math.floor(Date.now() / 1000) + expires_in, hub_id || null, '1'],
+        args: [access_token, refresh_token, Math.floor(Date.now() / 1000) + expires_in, hub_id || null, userId],
       });
     } else {
       await turso.execute({
         sql: "INSERT INTO hubspot_tokens (id, user_id, access_token, refresh_token, expires_at, hub_id) VALUES (?, ?, ?, ?, ?, ?)",
-        args: [`hs-${Date.now()}`, '1', access_token, refresh_token, Math.floor(Date.now() / 1000) + expires_in, hub_id || null],
+        args: [`hs-${Date.now()}`, userId, access_token, refresh_token, Math.floor(Date.now() / 1000) + expires_in, hub_id || null],
       });
     }
 

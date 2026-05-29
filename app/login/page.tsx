@@ -34,9 +34,9 @@ export default function LoginPage() {
     setLoading(false);
 
     if (result?.error) {
-      setError('authentication failed. check credentials.');
+      setError('login failed. check credentials.');
     } else {
-      router.push('/dashboard');
+      window.location.href = '/dashboard';
     }
   };
 
@@ -47,7 +47,7 @@ export default function LoginPage() {
           <div className="text-2xl font-bold tracking-wider mb-2">
             node<span className="text-accent-red">0</span>
           </div>
-          <div className="text-xs text-text-dim">// authenticate</div>
+          <div className="text-xs text-text-dim">// login</div>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-bg-surface border border-border-default p-6 flex flex-col gap-4" noValidate>
@@ -92,7 +92,7 @@ export default function LoginPage() {
           </div>
 
           <TerminalButton type="submit" variant="primary" className="w-full mt-2" disabled={loading}>
-            {loading ? 'authenticating...' : 'authenticate'}
+            {loading ? 'logging in...' : 'log in'}
           </TerminalButton>
         </form>
 

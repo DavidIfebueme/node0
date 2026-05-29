@@ -1,15 +1,22 @@
 import { NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
 import { getTurso, initDb } from '@/lib/turso';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) {
+    return NextResponse.json({ connected: false });
+  }
+
   try {
     await initDb();
     const turso = getTurso();
     const result = await turso.execute({
       sql: "SELECT hub_id, expires_at FROM hubspot_tokens WHERE user_id = ?",
-      args: ['1'],
+      args: [userId],
     });
 
     if (result.rows.length === 0) {

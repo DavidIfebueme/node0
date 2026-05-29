@@ -91,7 +91,8 @@ export async function POST(req: NextRequest) {
           send('progress', { message: `scanning for breaches affecting ${profile.companyName}'s ${targets.length} targets...`, progress: 5 });
 
           const breaches = await scanForBreachRelevance((stage, detail) => {
-            send('progress', { message: detail, progress: 15 });
+            const pct = stage === 'detect' ? Math.min(20, 5 + Math.random() * 10) : 15;
+            send('progress', { message: detail, progress: Math.round(pct) });
           });
 
           send('progress', { message: `found ${breaches.length} breaches`, progress: 25 });
@@ -109,7 +110,7 @@ export async function POST(req: NextRequest) {
             });
 
             const vendorRels = getStore().relationships.filter(r => r.sourceCompanyId === breach.companyId);
-            const uniqueVendorIds = [...new Set(vendorRels.map(r => r.targetVendorId))].slice(0, 3);
+            const uniqueVendorIds = [...new Set(vendorRels.map(r => r.targetVendorId))].slice(0, 2);
 
             for (const vendorId of uniqueVendorIds) {
               await findCompaniesUsingVendor(vendorId, (stage, detail) => {

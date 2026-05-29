@@ -151,21 +151,26 @@ export async function scanForBreachRelevance(onProgress?: ScanProgressCallback):
     'credential leak data exposure hack breach enterprise',
   ];
 
+  onProgress?.('detect', 'running 5 discovery queries...');
   const liveResults = await Promise.allSettled(
     queries.map(query =>
       c.discover(query, {
         intent: `security breaches, cyber incidents, data leaks, and ransomware attacks affecting companies — especially relevant to ${profile.industry} vendors and their customers`,
         includeContent: false,
-        numResults: 15,
+        numResults: 10,
       })
     )
   );
 
-  onProgress?.('detect', 'running SERP news search for recent breaches...');
-  const serpResults = await Promise.allSettled([
-    c.search.google('data breach 2026 company hack ransomware', { format: 'json', dataFormat: 'markdown' }),
-    c.search.google('cybersecurity incident supply chain attack 2026', { format: 'json', dataFormat: 'markdown' }),
-  ]);
+  onProgress?.('detect', 'running SERP news search...');
+  let serpResults: PromiseSettledResult<{ body?: string }>[] = [];
+  try {
+    serpResults = await Promise.allSettled([
+      c.search.google('data breach 2026 company hack ransomware', { format: 'json', dataFormat: 'markdown' }),
+    ]);
+  } catch {
+    onProgress?.('detect', 'SERP search skipped (timeout)');
+  }
 
   const candidateItems: { item: DiscoverResultItem; companyName: string }[] = [];
 
@@ -179,12 +184,12 @@ export async function scanForBreachRelevance(onProgress?: ScanProgressCallback):
         b => b.companyName.toLowerCase() === companyName.toLowerCase()
       ) || breaches.find(b => b.companyName.toLowerCase() === companyName.toLowerCase());
       if (existingBreach) continue;
-      if (candidateItems.length >= 15) break;
+      if (candidateItems.length >= 8) break;
       if (!candidateItems.some(c => c.companyName.toLowerCase() === companyName.toLowerCase())) {
         candidateItems.push({ item, companyName });
       }
     }
-    if (candidateItems.length >= 15) break;
+    if (candidateItems.length >= 8) break;
   }
 
   for (const result of serpResults) {
@@ -197,15 +202,17 @@ export async function scanForBreachRelevance(onProgress?: ScanProgressCallback):
       if (!companyName) continue;
       if (candidateItems.some(c => c.companyName.toLowerCase() === companyName.toLowerCase())) continue;
       if (breaches.find(b => b.companyName.toLowerCase() === companyName.toLowerCase())) continue;
-      if (candidateItems.length >= 15) break;
+      if (candidateItems.length >= 8) break;
       candidateItems.push({ item: entry, companyName });
     }
   }
 
-  onProgress?.('detect', `extracting breach data with AI for ${candidateItems.length} candidates...`);
+  const aiCandidates = candidateItems.slice(0, 5);
+  onProgress?.('detect', `extracting breach data with AI for ${aiCandidates.length} candidates...`);
 
   const aiResults = await Promise.allSettled(
-    candidateItems.map(async ({ item, companyName }) => {
+    aiCandidates.map(async ({ item, companyName }) => {
+      onProgress?.('detect', `analyzing: ${companyName}...`);
       const articleText = `TITLE: ${item.title}\n\n${item.description}`;
       const extraction = await extractBreachData(articleText);
       return { item, companyName, extraction };
@@ -218,7 +225,7 @@ export async function scanForBreachRelevance(onProgress?: ScanProgressCallback):
     const companyName = extraction.companyName !== 'Unknown' ? extraction.companyName : regexName;
     const existingBreach = breaches.find(b => b.companyName.toLowerCase() === companyName.toLowerCase());
     if (existingBreach) continue;
-    if (breaches.length >= 10) break;
+    if (breaches.length >= 5) break;
 
     const company = getOrCreateCompany(companyName, `${companyName.toLowerCase().replace(/\s+/g, '')}.com`, 'Technology');
     const severity = (['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].includes(extraction.severity) ? extraction.severity : classifySeverity(item.description, item.title)) as Severity;

@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { generateOutreach } from '@/lib/api';
 import { useStore } from '@/lib/store';
 import { TerminalButton } from '@/components/ui/terminal-button';
-import { Send, FileText, Sparkles, Loader2, Check, Copy } from 'lucide-react';
+import { Send, FileText, Sparkles, Loader2, Check, Copy, ArrowUpFromLine } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ToneSelector } from '@/components/actions/tone-selector';
 
@@ -18,6 +18,8 @@ export default function ActionsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [pushingToPipedrive, setPushingToPipedrive] = useState(false);
+  const [pushResult, setPushResult] = useState<string | null>(null);
 
   const cacheKey = selectedProspect ? `${selectedProspect.id}-${tone}` : '';
   const cached = cacheKey ? savedOutreach[cacheKey] : null;
@@ -79,6 +81,38 @@ export default function ActionsPage() {
     window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
   };
 
+  const handlePushToPipedrive = async () => {
+    if (prospects.length === 0) return;
+    setPushingToPipedrive(true);
+    setPushResult(null);
+    try {
+      const payload = prospects.map(p => ({
+        companyName: p.companyName,
+        industry: p.industry,
+        priority: p.priority,
+        breachCompany: breaches.find(b => b.id === p.breachId)?.companyName || '',
+        breachType: breaches.find(b => b.id === p.breachId)?.breachType || '',
+      }));
+      const res = await fetch('/api/crm/pipedrive/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prospects: payload }),
+      });
+      const data = await res.json();
+      if (data.results) {
+        const synced = data.results.filter((r: { status: string }) => r.status === 'synced').length;
+        setPushResult(`${synced}/${data.results.length} pushed to pipedrive`);
+      } else {
+        setPushResult(data.error || 'push failed');
+      }
+    } catch {
+      setPushResult('push failed');
+    } finally {
+      setPushingToPipedrive(false);
+      setTimeout(() => setPushResult(null), 5000);
+    }
+  };
+
   const breachGroups = useMemo(() => {
     const groups: Record<string, { breach: typeof breaches[0]; prospects: typeof prospects }> = {};
     for (const p of prospects) {
@@ -101,7 +135,19 @@ export default function ActionsPage() {
       <div className="w-full md:w-3/5 flex flex-col gap-4 overflow-hidden border border-border-default bg-bg-surface p-4">
         <div className="text-xs text-text-dim flex justify-between items-center">
           <span>//// prospects in blast zone</span>
-          <span className="text-text-primary px-2 py-1 bg-bg-elevated">{prospects.length} total</span>
+          <div className="flex items-center gap-2">
+            {pushResult && <span className="text-xs text-accent-green">{pushResult}</span>}
+            <TerminalButton
+              onClick={handlePushToPipedrive}
+              disabled={pushingToPipedrive || prospects.length === 0}
+              variant="ghost"
+              className="text-xs px-2 py-1"
+            >
+              {pushingToPipedrive ? <Loader2 size={12} className="animate-spin" /> : <ArrowUpFromLine size={12} />}
+              {pushingToPipedrive ? 'pushing...' : 'push to pipedrive'}
+            </TerminalButton>
+            <span className="text-text-primary px-2 py-1 bg-bg-elevated">{prospects.length} total</span>
+          </div>
         </div>
         
         <div className="flex-1 overflow-auto hide-scrollbar">

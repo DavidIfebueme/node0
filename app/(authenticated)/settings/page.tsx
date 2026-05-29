@@ -1,12 +1,25 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { getProfile } from '@/lib/api';
 import { TerminalButton } from '@/components/ui/terminal-button';
-import { CheckCircle, Building2, Target, Shield, Zap, Upload, Link2 } from 'lucide-react';
+import { CheckCircle, Building2, Target, Shield, Zap, Upload, Link2, Trash2, Pencil, Search, ChevronLeft, ChevronRight, X } from 'lucide-react';
+
+interface Target {
+  id: string;
+  name: string;
+  domain: string;
+  industry: string;
+  source: string;
+}
+
+interface TargetsPage {
+  targets: Target[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+}
 
 export default function SettingsPage() {
-  const [profile, setProfile] = useState<{ companyName: string; industry: string; targetCount: number; targets: Array<{ id: string; name: string; domain: string; industry: string }> } | null>(null);
+  const [profile, setProfile] = useState<{ companyName: string; industry: string; domain: string; targetCount: number; targets: Target[] } | null>(null);
   const [companyName, setCompanyName] = useState('');
   const [industry, setIndustry] = useState('');
   const [newTargetName, setNewTargetName] = useState('');
@@ -18,12 +31,33 @@ export default function SettingsPage() {
   const [hubspotConnected, setHubspotConnected] = useState(false);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
+  const [targetsData, setTargetsData] = useState<TargetsPage>({ targets: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } });
+  const [targetsSearch, setTargetsSearch] = useState('');
+  const [targetsPage, setTargetsPage] = useState(1);
+  const [editingTarget, setEditingTarget] = useState<Target | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDomain, setEditDomain] = useState('');
+  const [editIndustry, setEditIndustry] = useState('');
+  const [showAllTargets, setShowAllTargets] = useState(false);
+
+  const fetchTargets = useCallback(async (page: number, search: string) => {
+    const params = new URLSearchParams({ page: String(page), limit: '20' });
+    if (search) params.set('search', search);
+    try {
+      const res = await fetch(`/api/targets?${params}`);
+      if (res.ok) {
+        const data: TargetsPage = await res.json();
+        setTargetsData(data);
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
     getProfile().then(p => {
       setProfile(p);
       setCompanyName(p.companyName);
       setIndustry(p.industry);
-    }).catch(err => setError('failed to load profile'));
+    }).catch(() => setError('failed to load profile'));
 
     fetch('/api/crm/hubspot/status').then(r => r.json()).then(d => setHubspotConnected(d.connected)).catch(() => {});
 
@@ -32,6 +66,10 @@ export default function SettingsPage() {
     if (params.get('hubspot') === 'error') setError('hubspot connection failed');
     if (params.get('hubspot')) window.history.replaceState({}, '', '/settings');
   }, []);
+
+  useEffect(() => {
+    if (showAllTargets) fetchTargets(targetsPage, targetsSearch);
+  }, [showAllTargets, targetsPage, targetsSearch, fetchTargets]);
 
   const handleSaveProfile = () => {
     setError('');
@@ -42,7 +80,7 @@ export default function SettingsPage() {
     }).then(() => {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    }).catch(console.error);
+    }).catch(() => setError('failed to save profile'));
   };
 
   const handleAddTarget = () => {
@@ -58,11 +96,43 @@ export default function SettingsPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ addTarget: newTarget }),
     }).then(() => {
-      setProfile(prev => prev ? { ...prev, targets: [...prev.targets, newTarget], targetCount: prev.targetCount + 1 } : prev);
+      getProfile().then(p => setProfile(p));
+      if (showAllTargets) fetchTargets(targetsPage, targetsSearch);
       setNewTargetName('');
       setNewTargetDomain('');
       setNewTargetIndustry('');
-    }).catch(console.error);
+    }).catch(() => setError('failed to add target'));
+  };
+
+  const handleDeleteTarget = (id: string) => {
+    fetch('/api/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ removeTarget: id }),
+    }).then(() => {
+      getProfile().then(p => setProfile(p));
+      if (showAllTargets) fetchTargets(targetsPage, targetsSearch);
+    }).catch(() => setError('failed to delete target'));
+  };
+
+  const handleEditTarget = (target: Target) => {
+    setEditingTarget(target);
+    setEditName(target.name);
+    setEditDomain(target.domain);
+    setEditIndustry(target.industry);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingTarget || !editName) return;
+    fetch('/api/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updateTarget: { id: editingTarget.id, name: editName, domain: editDomain, industry: editIndustry } }),
+    }).then(() => {
+      setEditingTarget(null);
+      getProfile().then(p => setProfile(p));
+      if (showAllTargets) fetchTargets(targetsPage, targetsSearch);
+    }).catch(() => setError('failed to update target'));
   };
 
   const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -101,6 +171,7 @@ export default function SettingsPage() {
       }).then(() => {
         setCsvStatus('done');
         getProfile().then(p => setProfile(p));
+        if (showAllTargets) fetchTargets(targetsPage, targetsSearch);
         setTimeout(() => setCsvStatus('idle'), 3000);
       }).catch(() => {
         setCsvStatus('error');
@@ -111,16 +182,18 @@ export default function SettingsPage() {
     e.target.value = '';
   };
 
+  const previewTargets = profile?.targets?.slice(0, 5) || [];
+
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto flex flex-col gap-8 h-[calc(100vh-4rem)] overflow-y-auto hide-scrollbar">
-      
+
       <div>
-        <h1 className="text-xl font-bold mb-2">Settings</h1>
-        <p className="text-sm text-text-secondary">Your company profile determines what node0 scans for. We monitor for breaches that affect your target accounts through shared vendors, then generate outreach you can send to them.</p>
+        <h1 className="text-xl font-bold mb-2">settings</h1>
+        <p className="text-sm text-text-secondary">your company profile determines what node0 scans for. we monitor for breaches that affect your target accounts through shared vendors, then generate outreach you can send to them.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        
+
         <section className="bg-bg-surface border border-border-default p-5">
           <div className="flex items-center gap-2 text-xs text-text-dim mb-4 border-b border-border-muted pb-2">
             <Building2 size={14} /> //// your company
@@ -177,16 +250,121 @@ export default function SettingsPage() {
             <span className="text-xs text-text-dim">these are the companies you want to sell to — node0 alerts you when they enter a breach blast zone</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
-            {profile?.targets.map(target => (
-              <div key={target.id} className="p-3 border border-border-default bg-bg-primary/50">
-                <div className="font-bold text-text-primary text-sm">{target.name}</div>
-                <div className="text-xs text-text-dim">{target.domain} · {target.industry}</div>
+          {!showAllTargets ? (
+            <>
+              {previewTargets.length > 0 ? (
+                <div className="flex flex-col gap-1 mb-3">
+                  {previewTargets.map(target => (
+                    <div key={target.id} className="flex items-center justify-between px-3 py-2 border border-border-default bg-bg-primary/50">
+                      <div>
+                        <span className="font-bold text-text-primary text-sm">{target.name}</span>
+                        <span className="text-xs text-text-dim ml-2">{target.domain} · {target.industry}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => handleEditTarget(target)} className="p-1 text-text-dim hover:text-accent-cyan transition-colors"><Pencil size={12} /></button>
+                        <button onClick={() => handleDeleteTarget(target.id)} className="p-1 text-text-dim hover:text-accent-red transition-colors"><Trash2 size={12} /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-text-dim mb-3 py-4 text-center">no targets yet — add them below or import a csv</div>
+              )}
+              {(profile?.targetCount || 0) > 5 && (
+                <TerminalButton onClick={() => setShowAllTargets(true)} variant="ghost" className="mb-4 text-xs">
+                  view all {profile?.targetCount} targets →
+                </TerminalButton>
+              )}
+            </>
+          ) : (
+            <div className="mb-4">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="relative flex-1">
+                  <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-text-dim" />
+                  <input
+                    value={targetsSearch}
+                    onChange={e => { setTargetsSearch(e.target.value); setTargetsPage(1); }}
+                    placeholder="search targets..."
+                    className="w-full bg-bg-primary border border-border-muted pl-7 p-2 text-xs text-text-primary outline-none focus:border-accent-cyan"
+                  />
+                </div>
+                <TerminalButton onClick={() => setShowAllTargets(false)} variant="ghost" className="text-xs">
+                  <X size={12} /> close
+                </TerminalButton>
               </div>
-            ))}
-          </div>
+              <div className="border border-border-default">
+                <div className="flex text-[10px] text-text-dim border-b border-border-muted bg-bg-elevated px-3 py-2">
+                  <div className="flex-1">company</div>
+                  <div className="w-36">domain</div>
+                  <div className="w-24">industry</div>
+                  <div className="w-20">source</div>
+                  <div className="w-14" />
+                </div>
+                {targetsData.targets.length === 0 ? (
+                  <div className="text-xs text-text-dim py-4 text-center">no targets found</div>
+                ) : (
+                  targetsData.targets.map(target => (
+                    <div key={target.id} className="flex items-center px-3 py-2 border-b border-border-muted last:border-b-0 text-xs">
+                      <div className="flex-1 text-text-primary font-bold truncate">{target.name}</div>
+                      <div className="w-36 text-text-dim truncate">{target.domain}</div>
+                      <div className="w-24 text-text-dim truncate">{target.industry}</div>
+                      <div className="w-20 text-text-dim">{target.source}</div>
+                      <div className="w-14 flex items-center gap-1">
+                        <button onClick={() => handleEditTarget(target)} className="p-0.5 text-text-dim hover:text-accent-cyan transition-colors"><Pencil size={11} /></button>
+                        <button onClick={() => handleDeleteTarget(target.id)} className="p-0.5 text-text-dim hover:text-accent-red transition-colors"><Trash2 size={11} /></button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              {targetsData.pagination.totalPages > 1 && (
+                <div className="flex items-center justify-between mt-2 text-xs text-text-dim">
+                  <span>{targetsData.pagination.total} total</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setTargetsPage(p => Math.max(1, p - 1))}
+                      disabled={targetsPage === 1}
+                      className="p-1 border border-border-muted hover:border-border-default disabled:opacity-30"
+                    >
+                      <ChevronLeft size={12} />
+                    </button>
+                    <span>{targetsPage} / {targetsData.pagination.totalPages}</span>
+                    <button
+                      onClick={() => setTargetsPage(p => Math.min(targetsData.pagination.totalPages, p + 1))}
+                      disabled={targetsPage === targetsData.pagination.totalPages}
+                      className="p-1 border border-border-muted hover:border-border-default disabled:opacity-30"
+                    >
+                      <ChevronRight size={12} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
-          <div className="border border-border-dashed p-4">
+          {editingTarget && (
+            <div className="border border-accent-cyan/30 bg-accent-cyan/5 p-4 mb-4">
+              <div className="text-xs text-accent-cyan mb-2">edit target</div>
+              <div className="flex flex-wrap gap-3 items-end">
+                <div className="flex-1 min-w-[120px]">
+                  <label className="text-xs text-text-secondary block mb-1">name</label>
+                  <input value={editName} onChange={e => setEditName(e.target.value)} className="w-full bg-bg-primary border border-border-muted p-2 text-sm text-text-primary outline-none focus:border-accent-cyan" />
+                </div>
+                <div className="flex-1 min-w-[120px]">
+                  <label className="text-xs text-text-secondary block mb-1">domain</label>
+                  <input value={editDomain} onChange={e => setEditDomain(e.target.value)} className="w-full bg-bg-primary border border-border-muted p-2 text-sm text-text-primary outline-none focus:border-accent-cyan" />
+                </div>
+                <div className="flex-1 min-w-[100px]">
+                  <label className="text-xs text-text-secondary block mb-1">industry</label>
+                  <input value={editIndustry} onChange={e => setEditIndustry(e.target.value)} className="w-full bg-bg-primary border border-border-muted p-2 text-sm text-text-primary outline-none focus:border-accent-cyan" />
+                </div>
+                <TerminalButton onClick={handleSaveEdit} variant="primary">save</TerminalButton>
+                <TerminalButton onClick={() => setEditingTarget(null)} variant="ghost">cancel</TerminalButton>
+              </div>
+            </div>
+          )}
+
+          <div className="border border-border-dashed p-4 mb-3">
             <div className="text-xs text-text-dim mb-3">add target account</div>
             <div className="flex flex-wrap gap-3 items-end">
               <div className="flex-1 min-w-[150px]">
@@ -244,26 +422,6 @@ export default function SettingsPage() {
 
         <section className="bg-bg-surface border border-border-default p-5">
           <div className="flex items-center gap-2 text-xs text-text-dim mb-4 border-b border-border-muted pb-2">
-            <Zap size={14} /> //// data sources
-          </div>
-          <div className="flex flex-col gap-3">
-            {[
-              { label: 'Bright Data Discover — ai-powered breach discovery', active: true },
-              { label: 'Bright Data SERP API — google news search', active: true },
-              { label: 'Web Unlocker — privacy policy & vendor page scraping', active: true },
-              { label: 'AI Extraction — structured breach + vendor data from articles', active: true },
-              { label: 'Vendor Customer Discovery — shared vendor tracing', active: true },
-            ].map((src, i) => (
-              <div key={i} className="flex items-center justify-between">
-                <span className="text-sm text-text-secondary">{src.label}</span>
-                <div className={`w-3 h-3 border ${src.active ? 'border-accent-cyan bg-accent-cyan/30' : 'border-border-muted bg-bg-primary'}`} />
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="bg-bg-surface border border-border-default p-5">
-          <div className="flex items-center gap-2 text-xs text-text-dim mb-4 border-b border-border-muted pb-2">
             <Link2 size={14} /> //// hubspot crm
           </div>
           <div className="flex flex-col gap-3">
@@ -305,7 +463,7 @@ export default function SettingsPage() {
             </div>
           </div>
         </section>
-        
+
       </div>
     </div>
   );

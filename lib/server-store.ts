@@ -43,13 +43,11 @@ const store: Store = {
 };
 
 const DEFAULT_PROFILE: UserProfile = {
-  userId: '1',
-  companyName: 'SentinelShield',
-  industry: 'Cybersecurity',
-  domain: 'sentinelshield.io',
+  userId: '',
+  companyName: '',
+  industry: '',
+  domain: '',
 };
-
-store.profile = DEFAULT_PROFILE;
 
 export function getStore() {
   return store;
@@ -69,9 +67,9 @@ export async function getProfile(): Promise<UserProfile> {
       const row = result.rows[0];
       store.profile = {
         userId: store.profile.userId,
-        companyName: (row.company_name as string) || 'SentinelShield',
-        industry: (row.industry as string) || 'Cybersecurity',
-        domain: (row.domain as string) || 'sentinelshield.io',
+        companyName: (row.company_name as string) || '',
+        industry: (row.industry as string) || '',
+        domain: (row.domain as string) || '',
       };
     }
   } catch {}
@@ -94,7 +92,7 @@ export async function getTargetAccounts(): Promise<Company[]> {
     await initDb();
     const result = await getTurso().execute({
       sql: "SELECT id, name, domain, industry FROM target_accounts WHERE user_id = ? ORDER BY created_at",
-      args: [store.profile?.userId || '1'],
+      args: [store.profile?.userId || ''],
     });
     if (result.rows.length > 0) {
       return result.rows.map(r => ({
@@ -105,20 +103,7 @@ export async function getTargetAccounts(): Promise<Company[]> {
       }));
     }
   } catch {}
-  return [
-    { id: 't-001', name: 'Stripe', domain: 'stripe.com', industry: 'Fintech' },
-    { id: 't-002', name: 'Shopify', domain: 'shopify.com', industry: 'E-Commerce' },
-    { id: 't-003', name: 'Slack', domain: 'slack.com', industry: 'SaaS' },
-    { id: 't-004', name: 'Datadog', domain: 'datadoghq.com', industry: 'Observability' },
-    { id: 't-005', name: 'Snowflake', domain: 'snowflake.com', industry: 'Data Warehouse' },
-    { id: 't-006', name: 'CrowdStrike', domain: 'crowdstrike.com', industry: 'Cybersecurity' },
-    { id: 't-007', name: 'Twilio', domain: 'twilio.com', industry: 'Communications' },
-    { id: 't-008', name: 'Okta', domain: 'okta.com', industry: 'Identity' },
-    { id: 't-009', name: 'Atlassian', domain: 'atlassian.com', industry: 'Collaboration' },
-    { id: 't-010', name: 'Salesforce', domain: 'salesforce.com', industry: 'CRM' },
-    { id: 't-011', name: 'HubSpot', domain: 'hubspot.com', industry: 'Marketing' },
-    { id: 't-012', name: 'PagerDuty', domain: 'pagerduty.com', industry: 'Incident Management' },
-  ];
+  return [];
 }
 
 export async function addTargetAccount(company: Company) {
@@ -127,7 +112,7 @@ export async function addTargetAccount(company: Company) {
     await initDb();
     await getTurso().execute({
       sql: "INSERT OR IGNORE INTO target_accounts (id, user_id, name, domain, industry, source) VALUES (?, ?, ?, ?, ?, 'manual')",
-      args: [company.id, store.profile?.userId || '1', company.name, company.domain, company.industry],
+      args: [company.id, store.profile?.userId || '', company.name, company.domain, company.industry],
     });
   } catch {}
 }

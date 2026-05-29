@@ -108,7 +108,10 @@ export async function POST(req: NextRequest) {
           send('progress', { message: 'initializing scan...', progress: 2 });
 
           const profile = await getProfile();
-          const targets = await getTargetAccounts();
+          let targets = await getTargetAccounts();
+          if (targetIds && targetIds.length > 0) {
+            targets = targets.filter(t => targetIds.includes(t.id));
+          }
           send('progress', { message: `scanning for breaches affecting ${profile.companyName}'s ${targets.length} targets...`, progress: 5 });
 
           let breaches: Breach[] = [];

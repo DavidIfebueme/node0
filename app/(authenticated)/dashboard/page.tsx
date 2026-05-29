@@ -23,9 +23,11 @@ export default function Dashboard() {
   const [availableTargets, setAvailableTargets] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedTargetIds, setSelectedTargetIds] = useState<Set<string>>(new Set());
   const [scanAll, setScanAll] = useState(true);
+  const [scanResult, setScanResult] = useState<{ type: 'success' | 'error' | 'empty'; message: string } | null>(null);
   const scanLogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (isScanning) setScanning(false);
     fetch('/api/profile').then(r => r.json()).then(d => {
       setTargetCount(d.targetCount || 0);
       if (d.targets) setAvailableTargets(d.targets.map((t: { id: string; name: string }) => ({ id: t.id, name: t.name })));
@@ -38,6 +40,7 @@ export default function Dashboard() {
     setScanning(true);
     setScanProgress(5);
     setScanLog([]);
+    setScanResult(null);
 
     const log = (msg: string) => {
       setScanLog(prev => [...prev.slice(-15), msg]);
@@ -64,9 +67,7 @@ export default function Dashboard() {
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
+        if (done) break;        buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
 
@@ -92,20 +93,33 @@ export default function Dashboard() {
                 }
               } else if (currentEvent === 'complete') {
                 if (data.progress) setScanProgress(data.progress);
-                log('scan complete');
+              } else if (currentEvent === 'error') {
+                const msg = data.message || 'scan failed';
+                log(`✕ ${msg}`);
+                setScanResult({ type: 'error', message: msg });
               }
             } catch {}
           }
         }
       }
+
+      if (!scanResult) {
+        const { breaches: b, prospects: p } = useStore.getState();
+        if (b.length === 0) {
+          setScanResult({ type: 'empty', message: 'no new breaches found — try again later or adjust targets' });
+        } else {
+          setScanResult({ type: 'success', message: `scan complete — ${b.length} breach${b.length !== 1 ? 'es' : ''}, ${p.length} prospect${p.length !== 1 ? 's' : ''} in blast zone` });
+        }
+      }
     } catch (err) {
       log('scan failed — check connection');
+      setScanResult({ type: 'error', message: 'scan failed — check connection' });
     } finally {
       setScanning(false);
       setLastScanAt(new Date().toISOString());
       fetch('/api/scan-history').then(r => r.json()).then(d => setScanHistory(d.scans || [])).catch(() => {});
     }
-  }, [isScanning, setScanning, setScanProgress, addBreach, addProspects, setLastScanAt]);
+  }, [isScanning, setScanning, setScanProgress, addBreach, addProspects, setLastScanAt, scanAll, selectedTargetIds]);
 
   const filteredBreaches = breaches.filter(b => {
     if (filter === 'critical') return b.severity === 'CRITICAL';
@@ -120,9 +134,15 @@ export default function Dashboard() {
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] p-4 md:p-8 max-w-7xl mx-auto w-full gap-4">
       <div className="flex flex-col gap-2 border-b border-border-default pb-4">
-        {breaches.length === 0 && !isScanning && (
+        {breaches.length === 0 && !isScanning && !scanResult && (
           <div className="text-xs text-text-dim bg-bg-surface border border-border-default p-3">
             <span className="text-accent-cyan">node0</span> monitors for breaches, maps which vendors are shared with your target accounts, and generates outreach so you can sell security to exposed companies. hit scan to start.
+          </div>
+        )}
+        {scanResult && !isScanning && (
+          <div className={`text-xs p-3 border ${scanResult.type === 'success' ? 'text-accent-green bg-accent-green/5 border-accent-green/20' : scanResult.type === 'empty' ? 'text-text-dim bg-bg-surface border-border-default' : 'text-accent-red bg-accent-red/5 border-accent-red/20'}`}>
+            {scanResult.message}
+            <button onClick={() => setScanResult(null)} className="ml-3 underline hover:no-underline">dismiss</button>
           </div>
         )}
         <div className="flex flex-wrap items-center gap-4 text-sm text-text-secondary">

@@ -212,7 +212,7 @@ export async function scanForBreachRelevance(onProgress?: ScanProgressCallback, 
   }
 
   const aiCandidates = candidateItems.slice(0, 5);
-  onProgress?.('detect', `extracting breach data with AI for ${aiCandidates.length} candidates...`);
+  onProgress?.('detect', `analyzing ${aiCandidates.length} breach reports with AI...`);
 
   const aiResults = await Promise.allSettled(
     aiCandidates.map(async ({ item, companyName }) => {

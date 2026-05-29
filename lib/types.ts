@@ -7,12 +7,16 @@ export interface Company {
   name: string;
   domain: string;
   industry: string;
+  employeeCount?: string;
+  linkedInDescription?: string;
 }
 
 export interface Vendor {
   id: string;
   name: string;
   category: string;
+  employeeCount?: string;
+  linkedInDescription?: string;
 }
 
 export interface Breach {

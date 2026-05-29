@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { scanForBreachRelevance, mapVendorNetwork, findCompaniesUsingVendor, identifyProspects } from '@/lib/brightdata';
+import { scanForBreachRelevance, mapVendorNetwork, findCompaniesUsingVendor, identifyProspects, enrichCompanyWithLinkedIn } from '@/lib/brightdata';
 import { getStore, startScan, completeScan, resetStore, getProfile, getTargetAccounts, setCurrentUserId } from '@/lib/server-store';
 import type { Breach } from '@/lib/types';
 
@@ -140,6 +140,12 @@ export async function POST(req: NextRequest) {
             const baseProgress = 25 + (i / Math.max(breaches.length, 1)) * 60;
 
             send('progress', { message: `mapping ${breach.companyName} vendor network...`, progress: baseProgress + 5 });
+
+            try {
+              await enrichCompanyWithLinkedIn(breach.companyName, `${breach.companyName.toLowerCase().replace(/\s+/g, '')}.com`, (stage, detail) => {
+                send('progress', { message: detail, progress: baseProgress + 7 });
+              });
+            } catch {}
 
             try {
               await mapVendorNetwork(breach, (stage, detail) => {

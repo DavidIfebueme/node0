@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { BreachCard } from '@/components/radar/breach-card';
 import { MonospaceStat } from '@/components/ui/monospace-stat';
 import { TerminalButton } from '@/components/ui/terminal-button';
@@ -13,6 +13,11 @@ export default function Dashboard() {
   const [filter, setFilter] = useState('all');
   const [scanLog, setScanLog] = useState<string[]>([]);
   const { isScanning, setScanning, scanProgress, setScanProgress, breaches, prospects, addBreach, addProspects, setLastScanAt } = useStore();
+  const [targetCount, setTargetCount] = useState(0);
+
+  useEffect(() => {
+    fetch('/api/profile').then(r => r.json()).then(d => setTargetCount(d.targetCount || 0)).catch(() => {});
+  }, []);
 
   const handleScan = useCallback(async () => {
     if (isScanning) return;
@@ -63,22 +68,19 @@ export default function Dashboard() {
                 if (data.prospects) {
                   addProspects(data.prospects as Prospect[]);
                 }
-              } else if (currentEvent === 'error') {
-                log(`error: ${data.message}`);
+              } else if (currentEvent === 'complete') {
+                if (data.progress) setScanProgress(data.progress);
+                log('scan complete');
               }
             } catch {}
           }
         }
       }
-
-      setScanProgress(100);
-      setLastScanAt(new Date().toISOString());
-      log('scan complete');
     } catch (err) {
-      log(`error: ${err instanceof Error ? err.message : 'scan failed'}`);
-      console.error('scan failed:', err);
+      log('scan failed — check connection');
     } finally {
       setScanning(false);
+      setLastScanAt(new Date().toISOString());
     }
   }, [isScanning, setScanning, setScanProgress, addBreach, addProspects, setLastScanAt]);
 
@@ -91,8 +93,6 @@ export default function Dashboard() {
     }
     return true;
   });
-
-  const targetCount = 12;
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] p-4 md:p-8 max-w-7xl mx-auto w-full gap-4">

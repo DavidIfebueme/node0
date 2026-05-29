@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
   if (step === 'full') {
     resetStore();
     startScan();
+    const scanStartedAt = new Date().toISOString();
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
@@ -155,6 +156,20 @@ export async function POST(req: NextRequest) {
             vendorsMapped: totalVendors,
             prospectsIdentified: totalProspects,
           });
+
+          try {
+            const { getTurso } = await import('@/lib/turso');
+            const turso = getTurso();
+            const scanId = `scan-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+            const session = await (await import('@/lib/auth')).auth();
+            const userId = session?.user?.id;
+            if (userId) {
+              await turso.execute({
+                sql: "INSERT INTO scan_history (id, user_id, status, breaches_found, vendors_mapped, prospects_identified, started_at, completed_at) VALUES (?, ?, 'completed', ?, ?, ?, ?, ?)",
+                args: [scanId, userId, breaches.length, totalVendors, totalProspects, scanStartedAt, new Date().toISOString()],
+              });
+            }
+          } catch {}
 
           send('progress', { message: `scan complete — ${allBreaches.length} breaches, ${finalStore.vendors.size} vendors, ${finalStore.prospects.length} prospects`, progress: 100 });
         } catch (err) {

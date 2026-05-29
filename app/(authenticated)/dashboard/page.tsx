@@ -5,7 +5,7 @@ import { BreachCard } from '@/components/radar/breach-card';
 import { MonospaceStat } from '@/components/ui/monospace-stat';
 import { TerminalButton } from '@/components/ui/terminal-button';
 import { useStore } from '@/lib/store';
-import { Search } from 'lucide-react';
+import { Search, History } from 'lucide-react';
 import { ScanProgress } from '@/components/radar/scan-progress';
 import type { Breach, Prospect } from '@/lib/types';
 
@@ -14,9 +14,15 @@ export default function Dashboard() {
   const [scanLog, setScanLog] = useState<string[]>([]);
   const { isScanning, setScanning, scanProgress, setScanProgress, breaches, prospects, addBreach, addProspects, setLastScanAt } = useStore();
   const [targetCount, setTargetCount] = useState(0);
+  const [scanHistory, setScanHistory] = useState<Array<{
+    id: string; status: string; breachesFound: number; vendorsMapped: number;
+    prospectsIdentified: number; startedAt: string; completedAt: string | null;
+  }>>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     fetch('/api/profile').then(r => r.json()).then(d => setTargetCount(d.targetCount || 0)).catch(() => {});
+    fetch('/api/scan-history').then(r => r.json()).then(d => setScanHistory(d.scans || [])).catch(() => {});
   }, []);
 
   const handleScan = useCallback(async () => {
@@ -81,6 +87,7 @@ export default function Dashboard() {
     } finally {
       setScanning(false);
       setLastScanAt(new Date().toISOString());
+      fetch('/api/scan-history').then(r => r.json()).then(d => setScanHistory(d.scans || [])).catch(() => {});
     }
   }, [isScanning, setScanning, setScanProgress, addBreach, addProspects, setLastScanAt]);
 
@@ -173,6 +180,51 @@ export default function Dashboard() {
           ))}
         </div>
       </div>
+
+      {scanHistory.length > 0 && (
+        <div className="border border-border-default bg-bg-surface">
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="w-full px-4 py-2 flex items-center justify-between text-xs text-text-dim hover:text-text-secondary transition-colors"
+          >
+            <span className="flex items-center gap-2">
+              <History size={12} /> //// scan history ({scanHistory.length})
+            </span>
+            <span>{showHistory ? '▲' : '▼'}</span>
+          </button>
+          {showHistory && (
+            <div className="border-t border-border-muted">
+              <div className="flex text-[10px] text-text-dim border-b border-border-muted px-4 py-1.5 bg-bg-elevated">
+                <div className="w-36">started</div>
+                <div className="w-20">status</div>
+                <div className="w-16 text-center">breaches</div>
+                <div className="w-16 text-center">vendors</div>
+                <div className="w-16 text-center">prospects</div>
+                <div className="flex-1 text-right">duration</div>
+              </div>
+              {scanHistory.map(scan => {
+                const start = new Date(scan.startedAt);
+                const end = scan.completedAt ? new Date(scan.completedAt) : null;
+                const duration = end ? Math.round((end.getTime() - start.getTime()) / 1000) : null;
+                return (
+                  <div key={scan.id} className="flex text-xs text-text-secondary border-b border-border-muted last:border-b-0 px-4 py-2">
+                    <div className="w-36 text-text-dim">{start.toLocaleDateString()} {start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                    <div className="w-20">
+                      <span className={scan.status === 'completed' ? 'text-accent-green' : 'text-accent-orange'}>
+                        {scan.status}
+                      </span>
+                    </div>
+                    <div className="w-16 text-center text-accent-red">{scan.breachesFound}</div>
+                    <div className="w-16 text-center text-text-primary">{scan.vendorsMapped}</div>
+                    <div className="w-16 text-center text-accent-cyan">{scan.prospectsIdentified}</div>
+                    <div className="flex-1 text-right text-text-dim">{duration !== null ? `${duration}s` : '—'}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

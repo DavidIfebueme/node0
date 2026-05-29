@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { BreachCard } from '@/components/radar/breach-card';
 import { MonospaceStat } from '@/components/ui/monospace-stat';
 import { TerminalButton } from '@/components/ui/terminal-button';
@@ -23,6 +23,7 @@ export default function Dashboard() {
   const [availableTargets, setAvailableTargets] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedTargetIds, setSelectedTargetIds] = useState<Set<string>>(new Set());
   const [scanAll, setScanAll] = useState(true);
+  const scanLogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch('/api/profile').then(r => r.json()).then(d => {
@@ -38,7 +39,10 @@ export default function Dashboard() {
     setScanProgress(5);
     setScanLog([]);
 
-    const log = (msg: string) => setScanLog(prev => [...prev.slice(-15), msg]);
+    const log = (msg: string) => {
+      setScanLog(prev => [...prev.slice(-15), msg]);
+      setTimeout(() => scanLogRef.current?.scrollTo({ top: scanLogRef.current.scrollHeight }), 10);
+    };
 
     try {
       log('initializing scan...');
@@ -153,7 +157,7 @@ export default function Dashboard() {
         </div>
 
         {isScanning && scanLog.length > 0 && (
-          <div className="px-4 py-2 border-b border-border-muted bg-accent-cyan/5 text-xs font-mono text-accent-cyan max-h-32 overflow-y-auto">
+          <div ref={scanLogRef} className="px-4 py-2 border-b border-border-muted bg-accent-cyan/5 text-xs font-mono text-accent-cyan max-h-32 overflow-y-auto">
             {scanLog.map((msg, i) => (
               <div key={i} className="py-0.5">▸ {msg}</div>
             ))}
@@ -183,7 +187,7 @@ export default function Dashboard() {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => { setShowTargetPicker(!showTargetPicker); setScanAll(true); }}
+              onClick={() => setShowTargetPicker(!showTargetPicker)}
               className={`flex items-center gap-1 font-mono text-xs px-3 py-1 border transition-colors ${showTargetPicker ? 'border-text-secondary text-text-primary bg-bg-elevated' : 'border-border-muted text-text-secondary hover:border-border-default'}`}
             >
               <Filter size={11} /> targets: {scanAll ? 'all' : selectedTargetIds.size}

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { scanForBreachRelevance, mapVendorNetwork, findCompaniesUsingVendor, identifyProspects } from '@/lib/brightdata';
-import { getStore, startScan, completeScan, resetStore, getProfile, getTargetAccounts } from '@/lib/server-store';
+import { getStore, startScan, completeScan, resetStore, getProfile, getTargetAccounts, setCurrentUserId } from '@/lib/server-store';
 import type { Breach } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -76,7 +76,14 @@ export async function POST(req: NextRequest) {
   }
 
   if (step === 'full') {
+    const session = await (await import('@/lib/auth')).auth();
+    const userId = session?.user?.id;
+    if (!userId) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+    }
+
     resetStore();
+    setCurrentUserId(userId);
     startScan();
     const scanStartedAt = new Date().toISOString();
     const targetIds: string[] | null = body.targetIds || null;

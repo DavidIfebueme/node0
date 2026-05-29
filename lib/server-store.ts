@@ -53,6 +53,14 @@ export function getStore() {
   return store;
 }
 
+export function setCurrentUserId(userId: string) {
+  if (!store.profile) {
+    store.profile = { ...DEFAULT_PROFILE, userId };
+  } else {
+    store.profile.userId = userId;
+  }
+}
+
 export async function getProfile(): Promise<UserProfile> {
   if (!store.profile) {
     store.profile = DEFAULT_PROFILE;

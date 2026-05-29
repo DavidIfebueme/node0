@@ -29,6 +29,8 @@ export default function SettingsPage() {
   const [error, setError] = useState('');
   const [csvStatus, setCsvStatus] = useState<'idle' | 'parsing' | 'done' | 'error'>('idle');
   const [pipedriveConnected, setPipedriveConnected] = useState(false);
+  const [pipedriveImporting, setPipedriveImporting] = useState(false);
+  const [pipedriveImportResult, setPipedriveImportResult] = useState<string | null>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
   const [targetsData, setTargetsData] = useState<TargetsPage>({ targets: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } });
@@ -474,21 +476,53 @@ export default function SettingsPage() {
           <div className="flex flex-col gap-3">
             <div className="text-xs text-text-dim mb-1">connect pipedrive to sync contacts and push outreach directly to your crm pipeline</div>
             {pipedriveConnected ? (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs text-accent-green">
-                  <CheckCircle size={14} /> pipedrive connected
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs text-accent-green">
+                    <CheckCircle size={14} /> pipedrive connected
+                  </div>
+                  <button
+                    onClick={() => {
+                      fetch('/api/crm/pipedrive/disconnect', { method: 'DELETE' })
+                        .then(r => r.json())
+                        .then(d => { if (d.disconnected) setPipedriveConnected(false); })
+                        .catch(() => {});
+                    }}
+                    className="text-xs text-accent-red hover:text-accent-red/80 border border-accent-red/30 px-2 py-1"
+                  >
+                    disconnect
+                  </button>
                 </div>
-                <button
+                <TerminalButton
                   onClick={() => {
-                    fetch('/api/crm/pipedrive/disconnect', { method: 'DELETE' })
+                    setPipedriveImporting(true);
+                    setPipedriveImportResult(null);
+                    fetch('/api/crm/pipedrive/import', { method: 'POST' })
                       .then(r => r.json())
-                      .then(d => { if (d.disconnected) setPipedriveConnected(false); })
-                      .catch(() => {});
+                      .then(d => {
+                        if (d.imported !== undefined) {
+                          setPipedriveImportResult(`imported ${d.imported} organizations as targets`);
+                          getProfile().then(p => setProfile(p));
+                          if (showAllTargets) fetchTargets(targetsPage, targetsSearch);
+                        } else {
+                          setPipedriveImportResult(d.error || 'import failed');
+                        }
+                      })
+                      .catch(() => setPipedriveImportResult('import failed'))
+                      .finally(() => {
+                        setPipedriveImporting(false);
+                        setTimeout(() => setPipedriveImportResult(null), 5000);
+                      });
                   }}
-                  className="text-xs text-accent-red hover:text-accent-red/80 border border-accent-red/30 px-2 py-1"
+                  disabled={pipedriveImporting}
+                  variant="ghost"
+                  className="text-xs"
                 >
-                  disconnect
-                </button>
+                  {pipedriveImporting ? 'importing...' : 'import orgs as targets'}
+                </TerminalButton>
+                {pipedriveImportResult && (
+                  <div className="text-xs text-accent-green">{pipedriveImportResult}</div>
+                )}
               </div>
             ) : (
               <TerminalButton

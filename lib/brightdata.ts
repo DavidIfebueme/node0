@@ -40,9 +40,46 @@ function classifyBreachType(description: string, title: string): BreachType {
   return 'DATA_LEAK';
 }
 
-function extractCompanyNameFromResult(item: DiscoverResultItem): string | null {
-  const stopWords = new Set(['The','This','That','These','Those','Biggest','Largest','Major','Recent','New','Latest','April','May','June','July','August','September','October','November','December','January','February','March','Were','Was','Has','Have','Had','Are','Is','More','Over','About','How','Why','What','When','Where','Who','Which','Their','Our','Your','Millions','Thousands','Hundreds','Several','Multiple','Many','Some','All','Most','Other','Another','First','Last','Next','Former','After','Before','During','Following','According','Based','Data','Security','Cyber','Breached','Hacked','Attacked','Compromised','Forced','Reported','Confirmed','Companies','Must','Disclose','People','Users','Customers','Vendor','Firm','Company','Healthcare','Provider','Government','Agency','Organization','Third','Party','Supply','Chain','US','UK','EU','World','Global','National','State','Federal','Local','Public','Private','Online','Digital','Tech','Info','Group','Inc','Corp','Ltd','LLC']);
+const HEADLINE_GARBAGE = new Set([
+  'The','This','That','These','Those','Biggest','Largest','Major','Recent','New','Latest',
+  'April','May','June','July','August','September','October','November','December',
+  'January','February','March','Were','Was','Has','Have','Had','Are','Is','More',
+  'Over','About','How','Why','What','When','Where','Who','Which','Their','Our','Your',
+  'Millions','Thousands','Hundreds','Several','Multiple','Many','Some','All','Most',
+  'Other','Another','First','Last','Next','Former','After','Before','During','Following',
+  'According','Based','Data','Security','Cyber','Breached','Hacked','Attacked',
+  'Compromised','Forced','Reported','Confirmed','Companies','Must','Disclose',
+  'People','Users','Customers','Vendor','Firm','Company','Healthcare','Provider',
+  'Government','Agency','Organization','Third','Party','Supply','Chain',
+  'US','UK','EU','World','Global','National','State','Federal','Local','Public',
+  'Private','Online','Digital','Tech','Info','Group','Inc','Corp','Ltd','LLC',
+  'Reveals','Revealed','Discloses','Disclosed','Says','Announces','Announced',
+  'Internal','External','Attack','Attacks','Hack','Hacks','Breach','Breaches',
+  'Leak','Leaks','Alert','Warning','Threat','Threats','Vulnerability','Vulnerabilities',
+  'And','Or','But','Not','No','Yes','Just','Only','Also','Still','Already','Even',
+  'Since','Because','While','Although','Despite','However','Moreover','Furthermore',
+  'Here','There','Now','Then','Today','Yesterday','Tomorrow','Week','Month','Year',
+  'Man','Woman','Person','People','Officer','Director','Manager','Employee','Staff',
+  'Nike','Adidas','Puma','Under','Armour','Lululemon',
+]);
 
+function cleanExtractedName(raw: string): string | null {
+  let name = raw.trim();
+
+  name = name.replace(/\s+(Reveals?|Discloses?|Says|Announces?|Reports?|Confirms?|Internal|External|Incident|Attack|Hack|Breach|Leak|Vulnerability|Warning|Alert|Threat|Suffered|Confirmed|Reported|Disclosed|Announced|Was|Has|Had|Is|Got|Data|Customer|User|Employee)$/i, '');
+  name = name.replace(/^(Reveals?|Discloses?|Says|Announces?|Reports?|Confirms?|Internal|External|Attack|Hack|Breach|Leak|Cyber|Security|Data|New|Major|Recent|Latest)\s+/i, '');
+
+  const words = name.split(/\s+/);
+  if (words.some(w => HEADLINE_GARBAGE.has(w))) return null;
+  if (name.length < 3) return null;
+  if (/^[a-z]/.test(name)) return null;
+  if (/\d{4}/.test(name)) return null;
+  if (/^(and|or|the|a|an|of|in|on|at|to|for|with|by|from|up|into|through)\b/i.test(name)) return null;
+
+  return name;
+}
+
+function extractCompanyNameFromResult(item: DiscoverResultItem): string | null {
   const text = `${item.title} ${item.description}`;
 
   const patterns = [
@@ -57,26 +94,22 @@ function extractCompanyNameFromResult(item: DiscoverResultItem): string | null {
   for (const pattern of patterns) {
     const match = text.match(pattern);
     if (match) {
-      const name = match[1].trim();
-      const words = name.split(/\s+/);
-      if (words.some(w => stopWords.has(w))) continue;
-      if (name.length < 3) continue;
-      if (/^[a-z]/.test(name)) continue;
-      return name;
+      const cleaned = cleanExtractedName(match[1].trim());
+      if (cleaned) return cleaned;
     }
   }
 
   const knownCompanies = [
     'Snowflake','Okta','SolarWinds','Salesforce','Stripe','Shopify','Slack','Datadog',
     'CrowdStrike','Twilio','Atlassian','HubSpot','PagerDuty','MongoDB','Elastic',
-    'Cloudflare','Zscaler','Palo Alto','Fortinet','ServiceNow','Workday','Zoom',
+    'Cloudflare','Zscaler','Palo Alto Networks','Fortinet','ServiceNow','Workday','Zoom',
     'Dropbox','LastPass','MoveIT','Citrix','VMware','Cisco','Juniper','Norton',
-    'T-Mobile','AT&T','Verizon','Equifax','Capital One','Target','Home Depot',
-    'Marriott','Yahoo','LinkedIn','Adobe','Sony','Ashley Madison','Uber','Facebook',
-    'Google','Microsoft','Apple','Amazon','Netflix','Spotify','Twitter','X','Meta',
-    'Ticketmaster','Change Healthcare','Ascension','AT&T','Fidelity','Fiserv',
+    'T-Mobile','AT&T','Verizon','Equifax','Capital One','Home Depot',
+    'Marriott','Yahoo','LinkedIn','Adobe','Sony','Uber','Facebook',
+    'Google','Microsoft','Apple','Amazon','Netflix','Spotify','Meta',
+    'Ticketmaster','Change Healthcare','Ascension','Fidelity','Fiserv',
     'Broadcom','SAP','Oracle','IBM','HP','Dell','Lenovo','Samsung','Intel','AMD',
-    'NVIDIA','Qualcomm','Texas Instruments','Microchip',
+    'NVIDIA','Qualcomm',
   ];
 
   for (const company of knownCompanies) {
@@ -154,6 +187,56 @@ export async function scanForBreachRelevance(onProgress?: ScanProgressCallback):
 }
 
 
+const ENTERPRISE_VENDORS = [
+  'AWS', 'Amazon Web Services', 'Azure', 'Microsoft Azure', 'Google Cloud', 'GCP',
+  'Snowflake', 'Databricks', 'MongoDB', 'Elastic', 'Splunk',
+  'Okta', 'Auth0', 'Ping Identity', 'OneLogin', 'CyberArk',
+  'Salesforce', 'HubSpot', 'Zendesk', 'ServiceNow', 'SAP',
+  'Twilio', 'SendGrid', 'Stripe', 'PayPal', 'Adyen',
+  'Datadog', 'New Relic', 'PagerDuty',
+  'CrowdStrike', 'Palo Alto', 'Fortinet', 'Zscaler', 'Cloudflare',
+  'Slack', 'Zoom', 'Atlassian', 'Jira',
+  'Workday', 'ADP', 'BambooHR',
+  'Segment', 'Mixpanel', 'Amplitude',
+  'Fastly', 'Akamai', 'Vercel', 'Netlify',
+  'Cloudflare', 'Tailscale', 'HashiCorp', 'Confluent', 'Databricks',
+  'GitLab', 'GitHub', 'Bitbucket', 'CircleCI', 'Buildkite',
+  'Figma', 'Canva', 'Notion', 'Airtable', 'Monday',
+  'DocuSign', 'Adobe', 'Box', 'Dropbox', 'ShareFile',
+  'Rubrik', 'Cohesity', 'Veeam', 'Commvault',
+  'Palo Alto Networks', 'Check Point', 'Sophos', 'Trend Micro', 'Malwarebytes',
+  'Talend', 'Fivetran', 'dbt', 'Airbyte',
+  'Confluent', 'Kafka', 'RabbitMQ',
+];
+
+function extractVendorNamesFromText(text: string): string[] {
+  const found: string[] = [];
+  const lowerText = text.toLowerCase();
+
+  for (const vendor of ENTERPRISE_VENDORS) {
+    const regex = new RegExp(`\\b${vendor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    if (regex.test(lowerText)) {
+      found.push(vendor);
+    }
+  }
+
+  return [...new Set(found)].slice(0, 8);
+}
+
+function extractEnterpriseVendorsFromJobResults(items: DiscoverResultItem[]): string[] {
+  const found: string[] = [];
+  const allText = items.map(i => `${i.title} ${i.description}`).join(' ');
+
+  for (const vendor of ENTERPRISE_VENDORS) {
+    const regex = new RegExp(`\\b${vendor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    if (regex.test(allText)) {
+      found.push(vendor);
+    }
+  }
+
+  return [...new Set(found)].slice(0, 5);
+}
+
 export async function mapVendorNetwork(breach: Breach, onProgress?: ScanProgressCallback): Promise<void> {
   const c = getClient();
   onProgress?.('map', `mapping vendor network for ${breach.companyName}...`);
@@ -172,6 +255,7 @@ export async function mapVendorNetwork(breach: Breach, onProgress?: ScanProgress
       const body = (privacyResult as { body: string }).body;
       const vendorNames = extractVendorNamesFromText(body);
       for (const vName of vendorNames) {
+        if (vName.toLowerCase() === breach.companyName.toLowerCase()) continue;
         const vendor = getOrCreateVendor(vName, 'Cloud/SaaS');
         addRelationship({
           sourceCompanyId: breach.companyId,
@@ -187,24 +271,25 @@ export async function mapVendorNetwork(breach: Breach, onProgress?: ScanProgress
   }
 
   try {
-    onProgress?.('map', `searching for ${breach.companyName} tech stack...`);
-    const jobsResult = await c.discover(`${breach.companyName} engineer technology stack`, {
-      intent: 'job postings and tech stack information revealing vendor dependencies',
+    onProgress?.('map', `searching for ${breach.companyName} enterprise vendors and partners...`);
+    const jobsResult = await c.discover(`${breach.companyName} enterprise vendors partners technology stack SaaS`, {
+      intent: 'enterprise SaaS vendors, cloud providers, and technology partners that this company uses or integrates with',
       includeContent: false,
       numResults: 5,
     });
 
     if (jobsResult.success && jobsResult.data) {
-      const techKeywords = extractTechFromJobResults(jobsResult.data);
-      for (const tech of techKeywords) {
-        const vendor = getOrCreateVendor(tech, 'Technology');
+      const vendorNames = extractEnterpriseVendorsFromJobResults(jobsResult.data);
+      for (const vName of vendorNames) {
+        if (vName.toLowerCase() === breach.companyName.toLowerCase()) continue;
+        const vendor = getOrCreateVendor(vName, 'Cloud/SaaS');
         addRelationship({
           sourceCompanyId: breach.companyId,
           targetVendorId: vendor.id,
           confidence: 0.7,
-          discoveredFrom: 'job_posting',
+          discoveredFrom: 'tech_stack',
         });
-        onProgress?.('map', `found vendor: ${tech} (via tech stack)`);
+        onProgress?.('map', `found vendor: ${vName} (via tech stack)`);
       }
     }
   } catch (err) {
@@ -221,7 +306,7 @@ export async function findCompaniesUsingVendor(vendorId: string, onProgress?: Sc
   onProgress?.('trace', `tracing blast radius through ${vendor.name}...`);
 
   try {
-    const result = await c.discover(`companies using ${vendor.name} customers clients`, {
+    const result = await c.discover(`companies using ${vendor.name} customers clients enterprise`, {
       intent: 'companies that use or integrate with this vendor, especially enterprise customers',
       includeContent: false,
       numResults: 8,
@@ -251,7 +336,7 @@ export async function findCompaniesUsingVendor(vendorId: string, onProgress?: Sc
       }
 
       const mentionedCompany = extractCompanyNameFromResult(item);
-      if (mentionedCompany) {
+      if (mentionedCompany && mentionedCompany.toLowerCase() !== vendor.name.toLowerCase()) {
         const company = getOrCreateCompany(
           mentionedCompany,
           `${mentionedCompany.toLowerCase().replace(/\s+/g, '')}.com`,
@@ -275,55 +360,6 @@ export async function findCompaniesUsingVendor(vendorId: string, onProgress?: Sc
   }
 }
 
-function extractVendorNamesFromText(text: string): string[] {
-  const knownVendors = [
-    'AWS', 'Amazon Web Services', 'Azure', 'Microsoft Azure', 'Google Cloud', 'GCP',
-    'Snowflake', 'Databricks', 'MongoDB', 'Redis', 'Elastic', 'Splunk',
-    'Okta', 'Auth0', 'Ping Identity', 'OneLogin', 'CyberArk',
-    'Salesforce', 'HubSpot', 'Zendesk', 'ServiceNow', 'SAP',
-    'Twilio', 'SendGrid', 'Stripe', 'PayPal', 'Adyen',
-    'Datadog', 'New Relic', 'PagerDuty', 'Grafana',
-    'CrowdStrike', 'Palo Alto', 'Fortinet', 'Zscaler', 'Cloudflare',
-    'Slack', 'Zoom', 'Microsoft Teams', 'Atlassian', 'Jira',
-    'Workday', 'ADP', 'BambooHR', 'Gusto',
-    'Segment', 'Mixpanel', 'Amplitude', 'Optimizely',
-    'Fastly', 'Akamai', 'Vercel', 'Netlify',
-  ];
-
-  const found: string[] = [];
-  const lowerText = text.toLowerCase();
-
-  for (const vendor of knownVendors) {
-    if (lowerText.includes(vendor.toLowerCase())) {
-      found.push(vendor);
-    }
-  }
-
-  return [...new Set(found)];
-}
-
-function extractTechFromJobResults(items: DiscoverResultItem[]): string[] {
-  const techKeywords = [
-    'Kubernetes', 'Docker', 'Terraform', 'Ansible', 'Jenkins',
-    'React', 'Angular', 'Vue', 'Node.js', 'Python', 'Go', 'Rust',
-    'PostgreSQL', 'MySQL', 'Redis', 'Kafka', 'RabbitMQ',
-    'AWS', 'Azure', 'GCP', 'Snowflake', 'Databricks',
-    'Okta', 'Auth0', 'Datadog', 'Splunk', 'Elastic',
-    'Salesforce', 'HubSpot', 'Stripe', 'Twilio',
-  ];
-
-  const found: string[] = [];
-  const allText = items.map(i => `${i.title} ${i.description}`).join(' ').toLowerCase();
-
-  for (const tech of techKeywords) {
-    if (allText.includes(tech.toLowerCase())) {
-      found.push(tech);
-    }
-  }
-
-  return [...new Set(found)].slice(0, 5);
-}
-
 export async function identifyProspects(breachId: string, onProgress?: ScanProgressCallback): Promise<void> {
   const breach = getStore().breaches.get(breachId);
   if (!breach) return;
@@ -334,6 +370,11 @@ export async function identifyProspects(breachId: string, onProgress?: ScanProgr
   onProgress?.('prospect', 'cross-referencing blast zone with your target accounts...');
 
   for (const target of targets) {
+    const existingProspect = getStore().prospects.find(
+      p => p.companyId === target.id && p.breachId === breachId
+    );
+    if (existingProspect) continue;
+
     const targetVendors = getStore().relationships.filter(r => r.sourceCompanyId === target.id);
     const sharedVendors = vendorRels.filter(vr =>
       targetVendors.some(sv => sv.targetVendorId === vr.targetVendorId)
@@ -341,12 +382,17 @@ export async function identifyProspects(breachId: string, onProgress?: ScanProgr
 
     if (sharedVendors.length === 0) continue;
 
+    const allSharedVendorNames = sharedVendors.map(sv => {
+      const v = getStore().vendors.get(sv.targetVendorId);
+      return v ? v.name : 'Unknown';
+    });
+
     const bestVendor = sharedVendors.sort((a, b) => b.confidence - a.confidence)[0];
     const vendor = getStore().vendors.get(bestVendor.targetVendorId);
     if (!vendor) continue;
 
     const relevanceScore = Math.min(
-      0.5 + sharedVendors.length * 0.15 + bestVendor.confidence * 0.3,
+      0.5 + sharedVendors.length * 0.1 + bestVendor.confidence * 0.25,
       0.99
     );
 
@@ -368,6 +414,6 @@ export async function identifyProspects(breachId: string, onProgress?: ScanProgr
       targetVendorId: vendor.id,
     });
 
-    onProgress?.('prospect', `${target.name} in blast zone via ${vendor.name}`);
+    onProgress?.('prospect', `${target.name} in blast zone via ${allSharedVendorNames.join(', ')}`);
   }
 }

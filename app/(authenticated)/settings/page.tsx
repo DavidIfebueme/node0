@@ -28,7 +28,7 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
   const [csvStatus, setCsvStatus] = useState<'idle' | 'parsing' | 'done' | 'error'>('idle');
-  const [hubspotConnected, setHubspotConnected] = useState(false);
+  const [pipedriveConnected, setPipedriveConnected] = useState(false);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
   const [targetsData, setTargetsData] = useState<TargetsPage>({ targets: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } });
@@ -59,12 +59,14 @@ export default function SettingsPage() {
       setIndustry(p.industry);
     }).catch(() => setError('failed to load profile'));
 
-    fetch('/api/crm/hubspot/status').then(r => r.json()).then(d => setHubspotConnected(d.connected)).catch(() => {});
+    fetch('/api/crm/pipedrive/status').then(r => r.json()).then(d => setPipedriveConnected(d.connected)).catch(() => {});
 
     const params = new URLSearchParams(window.location.search);
-    if (params.get('hubspot') === 'connected') setHubspotConnected(true);
-    if (params.get('hubspot') === 'error') setError('hubspot connection failed');
-    if (params.get('hubspot')) window.history.replaceState({}, '', '/settings');
+    if (params.get('pipedrive') === 'connected') setPipedriveConnected(true);
+
+    if (params.get('pipedrive') === 'error') setError('pipedrive connection failed');
+
+    if (params.get('pipedrive')) window.history.replaceState({}, '', '/settings');
   }, []);
 
   useEffect(() => {
@@ -467,20 +469,20 @@ export default function SettingsPage() {
 
         <section className="bg-bg-surface border border-border-default p-5">
           <div className="flex items-center gap-2 text-xs text-text-dim mb-4 border-b border-border-muted pb-2">
-            <Link2 size={14} /> //// hubspot crm
+            <Link2 size={14} /> //// pipedrive crm
           </div>
           <div className="flex flex-col gap-3">
-            <div className="text-xs text-text-dim mb-1">connect hubspot to sync contacts and push outreach directly to your crm pipeline</div>
-            {hubspotConnected ? (
+            <div className="text-xs text-text-dim mb-1">connect pipedrive to sync contacts and push outreach directly to your crm pipeline</div>
+            {pipedriveConnected ? (
               <div className="flex items-center gap-2 text-xs text-accent-green">
-                <CheckCircle size={14} /> hubspot connected
+                <CheckCircle size={14} /> pipedrive connected
               </div>
             ) : (
               <TerminalButton
-                onClick={() => window.location.href = '/api/crm/hubspot/install'}
+                onClick={() => window.location.href = '/api/crm/pipedrive/install'}
                 variant="primary"
               >
-                <Link2 size={14} /> connect hubspot
+                <Link2 size={14} /> connect pipedrive
               </TerminalButton>
             )}
           </div>

@@ -22,7 +22,7 @@ const stackLayers = [
   {
     label: 'persistence & auth',
     items: [
-      { name: 'turso (libsql)', desc: 'edge-deployed sqlite — users, target accounts, hubspot tokens, saved outreach, scan history', tag: 'TURSO' },
+      { name: 'turso (libsql)', desc: 'edge-deployed sqlite — users, target accounts, pipedrive tokens, saved outreach, scan history', tag: 'TURSO' },
       { name: 'next-auth v5', desc: 'jwt-based credentials auth with turso-backed user store', tag: 'NEXTAUTH' },
     ],
   },
@@ -38,7 +38,7 @@ const stackLayers = [
     label: 'deployment & integrations',
     items: [
       { name: 'vercel', desc: 'serverless deployment with edge-optimized api routes', tag: 'VERCEL' },
-      { name: 'hubspot crm', desc: 'oauth integration for contact sync and deal pipeline', tag: 'HUBSPOT' },
+      { name: 'pipedrive crm', desc: 'oauth integration for contact sync and deal pipeline', tag: 'PIPEDRIVE' },
     ],
   },
 ];

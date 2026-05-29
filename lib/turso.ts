@@ -56,6 +56,18 @@ export async function initDb() {
   `);
 
   await turso.execute(`
+    CREATE TABLE IF NOT EXISTS pipedrive_tokens (
+      id TEXT PRIMARY KEY,
+      user_id TEXT UNIQUE NOT NULL,
+      access_token TEXT NOT NULL,
+      refresh_token TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      api_domain TEXT,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+  `);
+
+  await turso.execute(`
     CREATE TABLE IF NOT EXISTS saved_outreach (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,

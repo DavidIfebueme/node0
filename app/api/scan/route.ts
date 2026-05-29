@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { scanForBreachRelevance, mapVendorNetwork, findCompaniesUsingVendor, identifyProspects, enrichCompanyWithLinkedIn } from '@/lib/brightdata';
-import { getStore, startScan, completeScan, resetStore, getProfile, getTargetAccounts, setCurrentUserId } from '@/lib/server-store';
+import { getStore, startScan, completeScan, getProfile, getTargetAccounts, setCurrentUserId } from '@/lib/server-store';
 import type { Breach } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -11,7 +11,6 @@ export async function POST(req: NextRequest) {
   const step = body.step;
 
   if (step === 'init') {
-    resetStore();
     const scan = startScan();
     const profile = await getProfile();
     const targets = await getTargetAccounts();
@@ -82,7 +81,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
     }
 
-    resetStore();
     setCurrentUserId(userId);
     startScan();
     const scanStartedAt = new Date().toISOString();
@@ -125,7 +123,12 @@ export async function POST(req: NextRequest) {
           }
 
           if (breaches.length === 0) {
-            send('progress', { message: 'no breaches found — try adjusting targets or scan again later', progress: 100 });
+            const existingCount = getStore().breaches.size;
+            if (existingCount > 0) {
+              send('progress', { message: `no new breaches found — ${existingCount} existing breaches retained from previous scans`, progress: 100 });
+            } else {
+              send('progress', { message: 'no breaches found — try adjusting targets or scan again later', progress: 100 });
+            }
             stopHeartbeat();
             controller.close();
             return;
@@ -138,6 +141,28 @@ export async function POST(req: NextRequest) {
           for (let i = 0; i < breaches.length; i++) {
             const breach = breaches[i];
             const baseProgress = 25 + (i / Math.max(breaches.length, 1)) * 60;
+
+            const alreadyMapped = getStore().relationships.some(r => r.sourceCompanyId === breach.companyId);
+            if (alreadyMapped) {
+              send('progress', { message: `${breach.companyName} already mapped — skipping`, progress: baseProgress + 5 });
+              const breachProspects = getStore().prospects.filter(p => p.breachId === breach.id);
+              allBreaches.push({
+                id: breach.id,
+                title: breach.title,
+                description: breach.description,
+                severity: breach.severity,
+                breachType: breach.breachType,
+                detectedAt: breach.detectedAt,
+                companyId: breach.companyId,
+                companyName: breach.companyName,
+                mappedNodesCount: breach.mappedNodesCount,
+              });
+              send('breach', { breach: allBreaches[allBreaches.length - 1] });
+              if (breachProspects.length > 0) {
+                send('prospects', { prospects: breachProspects });
+              }
+              continue;
+            }
 
             send('progress', { message: `mapping ${breach.companyName} vendor network...`, progress: baseProgress + 5 });
 

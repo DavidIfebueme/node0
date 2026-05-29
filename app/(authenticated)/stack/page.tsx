@@ -113,23 +113,6 @@ export default function StackPage() {
           ))}
         </div>
       </div>
-
-      <div className="mt-8 border border-border-default bg-bg-surface">
-        <div className="px-4 py-2 border-b border-border-muted">
-          <span className="text-xs text-text-dim">//// partner prizes</span>
-        </div>
-        <div className="px-4 py-3 flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <div className="text-accent-cyan text-sm font-bold mb-1">bright data — web data unlocked</div>
-            <div className="text-text-dim text-[11px]">$18,300 total prizes — technology application, presentation, business value, originality</div>
-          </div>
-          <div className="border-l border-border-muted hidden md:block" />
-          <div className="flex-1">
-            <div className="text-accent-cyan text-sm font-bold mb-1">ai/ml api partner</div>
-            <div className="text-text-dim text-[11px]">$1,000 cash + $1,000 credits — glm-4.5-air for structured extraction and outreach generation</div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

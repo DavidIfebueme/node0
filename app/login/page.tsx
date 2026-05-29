@@ -5,21 +5,28 @@ import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { TerminalButton } from '@/components/ui/terminal-button';
+import { Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (!email.trim()) { setError('email is required'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('invalid email format'); return; }
+    if (!password) { setError('password is required'); return; }
+
     setLoading(true);
 
     const result = await signIn('credentials', {
-      email,
+      email: email.trim(),
       password,
       redirect: false,
     });
@@ -43,7 +50,7 @@ export default function LoginPage() {
           <div className="text-xs text-text-dim">// authenticate</div>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-bg-surface border border-border-default p-6 flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="bg-bg-surface border border-border-default p-6 flex flex-col gap-4" noValidate>
           {error && (
             <div className="text-accent-red text-xs font-mono bg-accent-red/5 border border-accent-red/20 p-2">
               {error}
@@ -57,6 +64,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              autoComplete="email"
               className="w-full bg-bg-primary border border-border-muted p-2 text-sm text-text-primary font-mono outline-none focus:border-accent-cyan transition-colors"
               placeholder="operator@node0.io"
             />
@@ -64,13 +72,23 @@ export default function LoginPage() {
 
           <div>
             <label className="text-xs text-text-secondary block mb-1">password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full bg-bg-primary border border-border-muted p-2 text-sm text-text-primary font-mono outline-none focus:border-accent-cyan transition-colors"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+                className="w-full bg-bg-primary border border-border-muted p-2 pr-9 text-sm text-text-primary font-mono outline-none focus:border-accent-cyan transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-secondary transition-colors"
+              >
+                {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
           </div>
 
           <TerminalButton type="submit" variant="primary" className="w-full mt-2" disabled={loading}>

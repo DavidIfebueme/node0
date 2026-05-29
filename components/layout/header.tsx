@@ -26,7 +26,6 @@ export function Header() {
   const navLinks = [
     { href: '/dashboard', label: '[ radar ]', active: pathname === '/dashboard' },
     { href: '/actions', label: '[ actions ]', active: pathname === '/actions' },
-    { href: '/stack', label: '[ stack ]', active: pathname === '/stack' },
   ];
 
   return (

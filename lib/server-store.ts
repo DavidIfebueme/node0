@@ -1,5 +1,5 @@
 import type { Breach, Company, Vendor, VendorRelationship, Prospect, OutreachMessage } from './types';
-import { turso, initDb } from './turso';
+import { getTurso, initDb } from './turso';
 
 export interface UserProfile {
   userId: string;
@@ -61,7 +61,7 @@ export async function getProfile(): Promise<UserProfile> {
   }
   try {
     await initDb();
-    const result = await turso.execute({
+    const result = await getTurso().execute({
       sql: "SELECT company_name, industry, domain FROM users WHERE id = ?",
       args: [store.profile.userId],
     });
@@ -82,7 +82,7 @@ export async function updateProfile(profile: Partial<UserProfile>) {
   store.profile = { ...await getProfile(), ...profile };
   try {
     await initDb();
-    await turso.execute({
+    await getTurso().execute({
       sql: "UPDATE users SET company_name = ?, industry = ?, domain = ? WHERE id = ?",
       args: [store.profile.companyName, store.profile.industry, store.profile.domain, store.profile.userId],
     });
@@ -92,7 +92,7 @@ export async function updateProfile(profile: Partial<UserProfile>) {
 export async function getTargetAccounts(): Promise<Company[]> {
   try {
     await initDb();
-    const result = await turso.execute({
+    const result = await getTurso().execute({
       sql: "SELECT id, name, domain, industry FROM target_accounts WHERE user_id = ? ORDER BY created_at",
       args: [store.profile?.userId || '1'],
     });
@@ -125,7 +125,7 @@ export async function addTargetAccount(company: Company) {
   store.companies.set(company.id, company);
   try {
     await initDb();
-    await turso.execute({
+    await getTurso().execute({
       sql: "INSERT OR IGNORE INTO target_accounts (id, user_id, name, domain, industry, source) VALUES (?, ?, ?, ?, ?, 'manual')",
       args: [company.id, store.profile?.userId || '1', company.name, company.domain, company.industry],
     });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { turso, initDb } from '@/lib/turso';
+import { getTurso, initDb } from '@/lib/turso';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'password must be at least 6 characters' }, { status: 400 });
   }
 
-  const existing = await turso.execute({
+  const existing = await getTurso().execute({
     sql: "SELECT id FROM users WHERE email = ?",
     args: [email],
   });
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   const companyName = company || '';
   const domain = companyName ? companyName.toLowerCase().replace(/\s+/g, '') + '.io' : '';
 
-  await turso.execute({
+  await getTurso().execute({
     sql: "INSERT INTO users (id, email, name, password_hash, company_name, industry, domain) VALUES (?, ?, ?, ?, ?, ?, ?)",
     args: [id, email, name, password, companyName, companyName ? 'Technology' : '', domain],
   });

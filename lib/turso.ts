@@ -1,11 +1,22 @@
-import { createClient } from '@libsql/client/web';
+import { createClient, type Client } from '@libsql/client/web';
 
-export const turso = createClient({
-  url: process.env.TURSO_DATABASE_URL!,
-  authToken: process.env.TURSO_AUTH_TOKEN!,
-});
+let _client: Client | null = null;
+
+export function getTurso(): Client {
+  if (!_client) {
+    const url = process.env.TURSO_DATABASE_URL;
+    const authToken = process.env.TURSO_AUTH_TOKEN;
+    if (!url || !authToken) {
+      throw new Error('TURSO_DATABASE_URL and TURSO_AUTH_TOKEN must be set');
+    }
+    _client = createClient({ url, authToken });
+  }
+  return _client;
+}
 
 export async function initDb() {
+  const turso = getTurso();
+
   await turso.execute(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,

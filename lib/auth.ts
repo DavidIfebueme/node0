@@ -1,6 +1,6 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import { turso, initDb } from './turso';
+import { getTurso, initDb } from './turso';
 
 let dbInitialized = false;
 
@@ -24,7 +24,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         await ensureDb();
 
-        const result = await turso.execute({
+        const result = await getTurso().execute({
           sql: "SELECT id, email, name, password_hash FROM users WHERE email = ?",
           args: [credentials.email as string],
         });

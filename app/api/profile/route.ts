@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { turso, initDb } from '@/lib/turso';
+import { getTurso, initDb } from '@/lib/turso';
 import type { Company } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -16,14 +16,14 @@ async function ensureDb() {
 export async function GET() {
   await ensureDb();
 
-  const userResult = await turso.execute({
+  const userResult = await getTurso().execute({
     sql: "SELECT id, email, name, company_name, industry, domain FROM users WHERE id = '1'",
     args: [],
   });
 
   const user = userResult.rows[0];
 
-  const targetsResult = await turso.execute({
+  const targetsResult = await getTurso().execute({
     sql: "SELECT id, name, domain, industry, source FROM target_accounts WHERE user_id = '1' ORDER BY created_at",
     args: [],
   });
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
 
   if (body.updateProfile) {
     const { companyName, industry, domain } = body.updateProfile;
-    await turso.execute({
+    await getTurso().execute({
       sql: "UPDATE users SET company_name = ?, industry = ?, domain = ? WHERE id = '1'",
       args: [companyName || '', industry || '', domain || ''],
     });
@@ -60,14 +60,14 @@ export async function POST(req: NextRequest) {
 
   if (body.addTarget) {
     const target: Company = body.addTarget;
-    await turso.execute({
+    await getTurso().execute({
       sql: "INSERT OR IGNORE INTO target_accounts (id, user_id, name, domain, industry, source) VALUES (?, '1', ?, ?, ?, 'manual')",
       args: [target.id, target.name, target.domain || '', target.industry || 'Technology'],
     });
   }
 
   if (body.removeTarget) {
-    await turso.execute({
+    await getTurso().execute({
       sql: "DELETE FROM target_accounts WHERE id = ? AND user_id = '1'",
       args: [body.removeTarget],
     });
@@ -76,19 +76,19 @@ export async function POST(req: NextRequest) {
   if (body.csvTargets) {
     for (const t of body.csvTargets as Array<{ name: string; domain: string; industry: string }>) {
       const id = `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      await turso.execute({
+      await getTurso().execute({
         sql: "INSERT OR IGNORE INTO target_accounts (id, user_id, name, domain, industry, source) VALUES (?, '1', ?, ?, ?, 'csv')",
         args: [id, t.name, t.domain || '', t.industry || 'Technology'],
       });
     }
   }
 
-  const targetsResult = await turso.execute({
+  const targetsResult = await getTurso().execute({
     sql: "SELECT id, name, domain, industry, source FROM target_accounts WHERE user_id = '1' ORDER BY created_at",
     args: [],
   });
 
-  const userResult = await turso.execute({
+  const userResult = await getTurso().execute({
     sql: "SELECT company_name, industry FROM users WHERE id = '1'",
     args: [],
   });

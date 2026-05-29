@@ -474,8 +474,21 @@ export default function SettingsPage() {
           <div className="flex flex-col gap-3">
             <div className="text-xs text-text-dim mb-1">connect pipedrive to sync contacts and push outreach directly to your crm pipeline</div>
             {pipedriveConnected ? (
-              <div className="flex items-center gap-2 text-xs text-accent-green">
-                <CheckCircle size={14} /> pipedrive connected
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs text-accent-green">
+                  <CheckCircle size={14} /> pipedrive connected
+                </div>
+                <button
+                  onClick={() => {
+                    fetch('/api/crm/pipedrive/disconnect', { method: 'DELETE' })
+                      .then(r => r.json())
+                      .then(d => { if (d.disconnected) setPipedriveConnected(false); })
+                      .catch(() => {});
+                  }}
+                  className="text-xs text-accent-red hover:text-accent-red/80 border border-accent-red/30 px-2 py-1"
+                >
+                  disconnect
+                </button>
               </div>
             ) : (
               <TerminalButton

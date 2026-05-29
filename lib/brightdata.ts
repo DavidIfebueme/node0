@@ -59,29 +59,23 @@ const HEADLINE_GARBAGE = new Set([
   'And','Or','But','Not','No','Yes','Just','Only','Also','Still','Already','Even',
   'Since','Because','While','Although','Despite','However','Moreover','Furthermore',
   'Here','There','Now','Then','Today','Yesterday','Tomorrow','Week','Month','Year',
-  'Man','Woman','Person','People','Officer','Director','Manager','Employee','Staff',
-  'Nike','Adidas','Puma','Under','Armour','Lululemon',
 ]);
 
 function cleanExtractedName(raw: string): string | null {
   let name = raw.trim();
-
   name = name.replace(/\s+(Reveals?|Discloses?|Says|Announces?|Reports?|Confirms?|Internal|External|Incident|Attack|Hack|Breach|Leak|Vulnerability|Warning|Alert|Threat|Suffered|Confirmed|Reported|Disclosed|Announced|Was|Has|Had|Is|Got|Data|Customer|User|Employee)$/i, '');
   name = name.replace(/^(Reveals?|Discloses?|Says|Announces?|Reports?|Confirms?|Internal|External|Attack|Hack|Breach|Leak|Cyber|Security|Data|New|Major|Recent|Latest)\s+/i, '');
-
   const words = name.split(/\s+/);
   if (words.some(w => HEADLINE_GARBAGE.has(w))) return null;
   if (name.length < 3) return null;
   if (/^[a-z]/.test(name)) return null;
   if (/\d{4}/.test(name)) return null;
   if (/^(and|or|the|a|an|of|in|on|at|to|for|with|by|from|up|into|through)\b/i.test(name)) return null;
-
   return name;
 }
 
 function extractCompanyNameFromResult(item: DiscoverResultItem): string | null {
   const text = `${item.title} ${item.description}`;
-
   const patterns = [
     /(?:breach(?:ed)?\s+(?:at|by|on|in|of)\s+|attack(?:ed)?\s+(?:on|at)\s+|hack(?:ed)?\s+(?:at|on|of)\s+|incident\s+(?:at|on|involving)\s+|compromised\s+(?:at|by)\s+)([A-Z][A-Za-z0-9]+(?:\s[A-Z][A-Za-z0-9]+){0,2})/i,
     /([A-Z][A-Za-z0-9]+(?:\s[A-Z][A-Za-z0-9]+){0,2})\s+(?:suffered|confirmed|reported|disclosed|announced|revealed)\s+(?:a\s+)?(?:data\s+)?(?:breach|leak|hack|attack|incident|compromise)/i,
@@ -90,7 +84,6 @@ function extractCompanyNameFromResult(item: DiscoverResultItem): string | null {
     /(?:data\s+breach|cyber\s+attack|security\s+incident|ransomware\s+attack)\s+(?:at|on|hits|targets|affects|impacts)\s+([A-Z][A-Za-z0-9]+(?:\s[A-Z][A-Za-z0-9]+){0,2})/i,
     /([A-Z][A-Za-z0-9]+(?:\s[A-Z][A-Za-z0-9]+){0,2})\s+(?:says|confirms|reports)\s+(?:data\s+)?(?:breach|leak|hack)/i,
   ];
-
   for (const pattern of patterns) {
     const match = text.match(pattern);
     if (match) {
@@ -98,7 +91,6 @@ function extractCompanyNameFromResult(item: DiscoverResultItem): string | null {
       if (cleaned) return cleaned;
     }
   }
-
   const knownCompanies = [
     'Snowflake','Okta','SolarWinds','Salesforce','Stripe','Shopify','Slack','Datadog',
     'CrowdStrike','Twilio','Atlassian','HubSpot','PagerDuty','MongoDB','Elastic',
@@ -111,12 +103,10 @@ function extractCompanyNameFromResult(item: DiscoverResultItem): string | null {
     'Broadcom','SAP','Oracle','IBM','HP','Dell','Lenovo','Samsung','Intel','AMD',
     'NVIDIA','Qualcomm',
   ];
-
   for (const company of knownCompanies) {
     const regex = new RegExp(`\\b${company.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
     if (regex.test(text)) return company;
   }
-
   return null;
 }
 
@@ -124,11 +114,10 @@ export interface ScanProgressCallback {
   (stage: string, detail: string): void;
 }
 
-
 export async function scanForBreachRelevance(onProgress?: ScanProgressCallback): Promise<Breach[]> {
   const c = getClient();
-  const profile = getProfile();
-  const targets = getTargetAccounts();
+  const profile = await getProfile();
+  const targets = await getTargetAccounts();
   const breaches: Breach[] = [];
 
   onProgress?.('detect', `scanning for breaches relevant to ${profile.companyName}'s ${targets.length} target accounts...`);
@@ -186,7 +175,6 @@ export async function scanForBreachRelevance(onProgress?: ScanProgressCallback):
   return breaches;
 }
 
-
 const ENTERPRISE_VENDORS = [
   'AWS', 'Amazon Web Services', 'Azure', 'Microsoft Azure', 'Google Cloud', 'GCP',
   'Snowflake', 'Databricks', 'MongoDB', 'Elastic', 'Splunk',
@@ -211,29 +199,20 @@ const ENTERPRISE_VENDORS = [
 
 function extractVendorNamesFromText(text: string): string[] {
   const found: string[] = [];
-  const lowerText = text.toLowerCase();
-
   for (const vendor of ENTERPRISE_VENDORS) {
     const regex = new RegExp(`\\b${vendor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-    if (regex.test(lowerText)) {
-      found.push(vendor);
-    }
+    if (regex.test(text)) found.push(vendor);
   }
-
   return [...new Set(found)].slice(0, 8);
 }
 
 function extractEnterpriseVendorsFromJobResults(items: DiscoverResultItem[]): string[] {
   const found: string[] = [];
   const allText = items.map(i => `${i.title} ${i.description}`).join(' ');
-
   for (const vendor of ENTERPRISE_VENDORS) {
     const regex = new RegExp(`\\b${vendor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-    if (regex.test(allText)) {
-      found.push(vendor);
-    }
+    if (regex.test(allText)) found.push(vendor);
   }
-
   return [...new Set(found)].slice(0, 5);
 }
 
@@ -302,7 +281,7 @@ export async function findCompaniesUsingVendor(vendorId: string, onProgress?: Sc
   const vendor = getStore().vendors.get(vendorId);
   if (!vendor) return;
 
-  const targets = getTargetAccounts();
+  const targets = await getTargetAccounts();
   onProgress?.('trace', `tracing blast radius through ${vendor.name}...`);
 
   try {
@@ -365,7 +344,7 @@ export async function identifyProspects(breachId: string, onProgress?: ScanProgr
   if (!breach) return;
 
   const vendorRels = getStore().relationships.filter(r => r.sourceCompanyId === breach.companyId);
-  const targets = getTargetAccounts();
+  const targets = await getTargetAccounts();
 
   onProgress?.('prospect', 'cross-referencing blast zone with your target accounts...');
 

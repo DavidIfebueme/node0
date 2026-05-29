@@ -20,18 +20,36 @@ export default function SignupPage() {
     setError('');
     setLoading(true);
 
-    const result = await signIn('credentials', {
-      email: 'demo@node0.io',
-      password: 'node0demo',
-      redirect: false,
-    });
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, name, company }),
+      });
 
-    setLoading(false);
+      const data = await res.json();
 
-    if (result?.error) {
-      setError('initialization failed.');
-    } else {
-      router.push('/dashboard');
+      if (!res.ok) {
+        setError(data.error || 'initialization failed.');
+        setLoading(false);
+        return;
+      }
+
+      const result = await signIn('credentials', {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setError('account created but login failed. try signing in manually.');
+      } else {
+        router.push('/dashboard');
+      }
+    } catch {
+      setError('initialization failed. try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -82,6 +100,7 @@ export default function SignupPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              minLength={6}
               className="w-full bg-bg-primary border border-border-muted p-2 text-sm text-text-primary font-mono outline-none focus:border-accent-cyan transition-colors"
             />
           </div>

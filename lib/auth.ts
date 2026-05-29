@@ -1,9 +1,15 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
+import { turso, initDb } from './turso';
 
-const DEMO_USERS = [
-  { id: '1', email: 'demo@node0.io', name: 'operator', password: 'node0demo' },
-];
+let dbInitialized = false;
+
+async function ensureDb() {
+  if (!dbInitialized) {
+    await initDb();
+    dbInitialized = true;
+  }
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -16,13 +22,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        const user = DEMO_USERS.find(
-          u => u.email === credentials.email && u.password === credentials.password
-        );
+        await ensureDb();
 
-        if (!user) return null;
+        const result = await turso.execute({
+          sql: "SELECT id, email, name, password_hash FROM users WHERE email = ?",
+          args: [credentials.email as string],
+        });
 
-        return { id: user.id, email: user.email, name: user.name };
+        if (result.rows.length === 0) return null;
+
+        const user = result.rows[0];
+        if (user.password_hash !== credentials.password) return null;
+
+        return { id: user.id as string, email: user.email as string, name: user.name as string };
       },
     }),
   ],

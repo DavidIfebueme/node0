@@ -1,4 +1,5 @@
 import type { Breach, Company, Vendor, VendorRelationship, Prospect, OutreachMessage } from './types';
+import { turso, initDb } from './turso';
 
 export interface UserProfile {
   userId: string;
@@ -41,21 +42,6 @@ const store: Store = {
   lastScanAt: null,
 };
 
-const DEFAULT_PROSPECTS: Company[] = [
-  { id: 't-001', name: 'Stripe', domain: 'stripe.com', industry: 'Fintech' },
-  { id: 't-002', name: 'Shopify', domain: 'shopify.com', industry: 'E-Commerce' },
-  { id: 't-003', name: 'Slack', domain: 'slack.com', industry: 'SaaS' },
-  { id: 't-004', name: 'Datadog', domain: 'datadoghq.com', industry: 'Observability' },
-  { id: 't-005', name: 'Snowflake', domain: 'snowflake.com', industry: 'Data Warehouse' },
-  { id: 't-006', name: 'CrowdStrike', domain: 'crowdstrike.com', industry: 'Cybersecurity' },
-  { id: 't-007', name: 'Twilio', domain: 'twilio.com', industry: 'Communications' },
-  { id: 't-008', name: 'Okta', domain: 'okta.com', industry: 'Identity' },
-  { id: 't-009', name: 'Atlassian', domain: 'atlassian.com', industry: 'Collaboration' },
-  { id: 't-010', name: 'Salesforce', domain: 'salesforce.com', industry: 'CRM' },
-  { id: 't-011', name: 'HubSpot', domain: 'hubspot.com', industry: 'Marketing' },
-  { id: 't-012', name: 'PagerDuty', domain: 'pagerduty.com', industry: 'Incident Management' },
-];
-
 const DEFAULT_PROFILE: UserProfile = {
   userId: '1',
   companyName: 'SentinelShield',
@@ -64,39 +50,86 @@ const DEFAULT_PROFILE: UserProfile = {
 };
 
 store.profile = DEFAULT_PROFILE;
-DEFAULT_PROSPECTS.forEach(c => store.companies.set(c.id, c));
 
 export function getStore() {
   return store;
 }
 
-export function getProfile(): UserProfile {
+export async function getProfile(): Promise<UserProfile> {
   if (!store.profile) {
     store.profile = DEFAULT_PROFILE;
   }
+  try {
+    await initDb();
+    const result = await turso.execute({
+      sql: "SELECT company_name, industry, domain FROM users WHERE id = ?",
+      args: [store.profile.userId],
+    });
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
+      store.profile = {
+        userId: store.profile.userId,
+        companyName: (row.company_name as string) || 'SentinelShield',
+        industry: (row.industry as string) || 'Cybersecurity',
+        domain: (row.domain as string) || 'sentinelshield.io',
+      };
+    }
+  } catch {}
   return store.profile;
 }
 
-export function updateProfile(profile: Partial<UserProfile>) {
-  store.profile = { ...getProfile(), ...profile };
+export async function updateProfile(profile: Partial<UserProfile>) {
+  store.profile = { ...await getProfile(), ...profile };
+  try {
+    await initDb();
+    await turso.execute({
+      sql: "UPDATE users SET company_name = ?, industry = ?, domain = ? WHERE id = ?",
+      args: [store.profile.companyName, store.profile.industry, store.profile.domain, store.profile.userId],
+    });
+  } catch {}
 }
 
-export function getTargetAccounts(): Company[] {
-  return DEFAULT_PROSPECTS;
+export async function getTargetAccounts(): Promise<Company[]> {
+  try {
+    await initDb();
+    const result = await turso.execute({
+      sql: "SELECT id, name, domain, industry FROM target_accounts WHERE user_id = ? ORDER BY created_at",
+      args: [store.profile?.userId || '1'],
+    });
+    if (result.rows.length > 0) {
+      return result.rows.map(r => ({
+        id: r.id as string,
+        name: r.name as string,
+        domain: r.domain as string,
+        industry: r.industry as string,
+      }));
+    }
+  } catch {}
+  return [
+    { id: 't-001', name: 'Stripe', domain: 'stripe.com', industry: 'Fintech' },
+    { id: 't-002', name: 'Shopify', domain: 'shopify.com', industry: 'E-Commerce' },
+    { id: 't-003', name: 'Slack', domain: 'slack.com', industry: 'SaaS' },
+    { id: 't-004', name: 'Datadog', domain: 'datadoghq.com', industry: 'Observability' },
+    { id: 't-005', name: 'Snowflake', domain: 'snowflake.com', industry: 'Data Warehouse' },
+    { id: 't-006', name: 'CrowdStrike', domain: 'crowdstrike.com', industry: 'Cybersecurity' },
+    { id: 't-007', name: 'Twilio', domain: 'twilio.com', industry: 'Communications' },
+    { id: 't-008', name: 'Okta', domain: 'okta.com', industry: 'Identity' },
+    { id: 't-009', name: 'Atlassian', domain: 'atlassian.com', industry: 'Collaboration' },
+    { id: 't-010', name: 'Salesforce', domain: 'salesforce.com', industry: 'CRM' },
+    { id: 't-011', name: 'HubSpot', domain: 'hubspot.com', industry: 'Marketing' },
+    { id: 't-012', name: 'PagerDuty', domain: 'pagerduty.com', industry: 'Incident Management' },
+  ];
 }
 
-export function addTargetAccount(company: Company) {
-  const existing = Array.from(store.companies.values()).find(c => c.name.toLowerCase() === company.name.toLowerCase());
-  if (!existing) {
-    store.companies.set(company.id, company);
-    DEFAULT_PROSPECTS.push(company);
-  }
-}
-
-export function removeTargetAccount(companyId: string) {
-  const idx = DEFAULT_PROSPECTS.findIndex(c => c.id === companyId);
-  if (idx >= 0) DEFAULT_PROSPECTS.splice(idx, 1);
-  store.prospects = store.prospects.filter(p => p.companyId !== companyId);
+export async function addTargetAccount(company: Company) {
+  store.companies.set(company.id, company);
+  try {
+    await initDb();
+    await turso.execute({
+      sql: "INSERT OR IGNORE INTO target_accounts (id, user_id, name, domain, industry, source) VALUES (?, ?, ?, ?, ?, 'manual')",
+      args: [company.id, store.profile?.userId || '1', company.name, company.domain, company.industry],
+    });
+  } catch {}
 }
 
 export function addBreach(breach: Breach) {

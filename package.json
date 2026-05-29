@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@brightdata/sdk": "^1.1.0",
+    "@hubspot/api-client": "^13.5.0",
+    "@libsql/client": "^0.17.3",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
     "@react-three/postprocessing": "^3.0.4",

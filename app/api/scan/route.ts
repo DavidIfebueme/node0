@@ -12,8 +12,8 @@ export async function POST(req: NextRequest) {
   if (step === 'init') {
     resetStore();
     const scan = startScan();
-    const profile = getProfile();
-    const targets = getTargetAccounts();
+    const profile = await getProfile();
+    const targets = await getTargetAccounts();
     return NextResponse.json({
       scanId: scan.id,
       profile: { companyName: profile.companyName, industry: profile.industry },
@@ -86,8 +86,8 @@ export async function POST(req: NextRequest) {
         };
 
         try {
-          const profile = getProfile();
-          const targets = getTargetAccounts();
+          const profile = await getProfile();
+          const targets = await getTargetAccounts();
           send('progress', { message: `scanning for breaches affecting ${profile.companyName}'s ${targets.length} targets...`, progress: 5 });
 
           const breaches = await scanForBreachRelevance((stage, detail) => {

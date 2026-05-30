@@ -79,7 +79,7 @@ export function Header() {
             className="w-6 h-6 border border-border-default rounded-full bg-bg-surface flex items-center justify-center hover:border-accent-cyan transition-colors"
           >
             <span className="text-xs text-text-secondary">
-              {session?.user?.name?.[0]?.toLowerCase() || 'u'}
+              {session?.user?.email?.[0]?.toLowerCase() || 'u'}
             </span>
           </button>
           {menuOpen && (

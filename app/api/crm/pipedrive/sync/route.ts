@@ -71,7 +71,6 @@ export async function POST(req: NextRequest) {
   for (const prospect of prospects.slice(0, 20)) {
     try {
       const orgPayload: Record<string, unknown> = { name: prospect.companyName };
-      if (prospect.industry) orgPayload.industry = prospect.industry;
 
       const orgRes = await fetch(`${baseUrl}/api/v1/organizations`, {
         method: 'POST',

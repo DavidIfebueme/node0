@@ -52,6 +52,14 @@ export function getStore() {
 }
 
 export function setCurrentUserId(userId: string) {
+  if (store.profile && store.profile.userId && store.profile.userId !== userId) {
+    store.breaches.clear();
+    store.companies.clear();
+    store.vendors.clear();
+    store.relationships = [];
+    store.prospects = [];
+    store.lastScanAt = null;
+  }
   if (!store.profile) {
     store.profile = { ...DEFAULT_PROFILE, userId };
   } else {
@@ -186,7 +194,14 @@ export async function loadScanState(): Promise<boolean> {
       sql: "SELECT data FROM scan_state WHERE user_id = ?",
       args: [store.profile.userId],
     });
-    if (result.rows.length === 0) return false;
+    if (result.rows.length === 0) {
+      store.breaches.clear();
+      store.companies.clear();
+      store.vendors.clear();
+      store.relationships = [];
+      store.prospects = [];
+      return false;
+    }
 
     const parsed = JSON.parse(result.rows[0].data as string);
     if (parsed.breaches) store.breaches = new Map(parsed.breaches);

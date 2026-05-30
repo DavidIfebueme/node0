@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
           }
 
           const vendorRels = getStore().relationships.filter(r => r.sourceCompanyId === breach.companyId);
-          const uniqueVendorIds = [...new Set(vendorRels.map(r => r.targetVendorId))].slice(0, 2);
+          const uniqueVendorIds = [...new Set(vendorRels.map(r => r.targetVendorId))].slice(0, 4);
 
           for (const vendorId of uniqueVendorIds) {
             try {

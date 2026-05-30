@@ -355,6 +355,52 @@ const ENTERPRISE_VENDORS = [
   'Confluent', 'Kafka', 'RabbitMQ',
 ];
 
+const KNOWN_CUSTOMER_MAP: Record<string, string[]> = {
+  'AWS': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Okta','Atlassian','Salesforce','HubSpot','PagerDuty','Netflix','Airbnb','Pinterest','Lyft'],
+  'Amazon Web Services': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Okta','Atlassian','Salesforce','HubSpot','PagerDuty'],
+  'Azure': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Okta','Atlassian','Salesforce','HubSpot','PagerDuty'],
+  'Google Cloud': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Okta','Atlassian','Salesforce','HubSpot','PagerDuty'],
+  'GCP': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Okta','Atlassian','Salesforce','HubSpot','PagerDuty'],
+  'Salesforce': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Okta','Atlassian','HubSpot','PagerDuty'],
+  'Okta': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Atlassian','Salesforce','HubSpot','PagerDuty'],
+  'Auth0': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Okta','Atlassian','Salesforce'],
+  'Datadog': ['Stripe','Shopify','Slack','Snowflake','CrowdStrike','Twilio','Okta','Atlassian','Salesforce','HubSpot','PagerDuty'],
+  'Snowflake': ['Stripe','Shopify','Slack','Datadog','CrowdStrike','Twilio','Okta','Atlassian','Salesforce','HubSpot','PagerDuty'],
+  'Slack': ['Stripe','Shopify','Datadog','Snowflake','CrowdStrike','Twilio','Okta','Atlassian','Salesforce','HubSpot','PagerDuty'],
+  'Twilio': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Okta','Atlassian','Salesforce','HubSpot','PagerDuty'],
+  'Stripe': ['Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Okta','Atlassian','Salesforce','HubSpot','PagerDuty'],
+  'CrowdStrike': ['Stripe','Shopify','Slack','Datadog','Snowflake','Twilio','Okta','Atlassian','Salesforce','HubSpot','PagerDuty'],
+  'Cloudflare': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Okta','Atlassian','Salesforce','HubSpot','PagerDuty'],
+  'Zendesk': ['Stripe','Shopify','Slack','Twilio','Atlassian','Salesforce','HubSpot','PagerDuty'],
+  'ServiceNow': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Okta','Atlassian','Salesforce'],
+  'HubSpot': ['Stripe','Shopify','Slack','Twilio','Atlassian','Salesforce'],
+  'PagerDuty': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Okta','Atlassian','Salesforce'],
+  'Atlassian': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Okta','Salesforce','HubSpot','PagerDuty'],
+  'Zoom': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Okta','Atlassian','Salesforce','HubSpot'],
+  'Splunk': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Okta','Atlassian','Salesforce'],
+  'MongoDB': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Atlassian','Salesforce'],
+  'New Relic': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Atlassian','Salesforce'],
+  'Zscaler': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Okta','Atlassian','Salesforce'],
+  'Palo Alto Networks': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Okta','Atlassian','Salesforce'],
+  'Fortinet': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Okta','Atlassian','Salesforce'],
+  'GitLab': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Okta','Atlassian','Salesforce'],
+  'GitHub': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Okta','Atlassian','Salesforce'],
+  'CyberArk': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Okta','Atlassian','Salesforce'],
+  'Confluent': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike','Twilio','Atlassian','Salesforce'],
+  'DocuSign': ['Stripe','Shopify','Slack','Salesforce','HubSpot','Atlassian'],
+  'Workday': ['Stripe','Shopify','Slack','Salesforce','Atlassian','HubSpot'],
+  'Dropbox': ['Stripe','Shopify','Slack','Atlassian','Salesforce'],
+  'Vercel': ['Stripe','Shopify','Slack','Datadog','Snowflake','Atlassian'],
+  'Rubrik': ['Stripe','Shopify','Slack','Datadog','Snowflake','CrowdStrike'],
+  'SAP': ['Stripe','Shopify','Slack','Datadog','Snowflake','Salesforce','Atlassian'],
+};
+
+function isLikelyCustomerOf(companyName: string, vendorName: string): boolean {
+  const customers = KNOWN_CUSTOMER_MAP[vendorName];
+  if (!customers) return false;
+  return customers.some(c => c.toLowerCase() === companyName.toLowerCase());
+}
+
 function extractVendorNamesFromText(text: string): string[] {
   const found: string[] = [];
   for (const vendor of ENTERPRISE_VENDORS) {
@@ -572,6 +618,12 @@ export async function identifyProspects(breachId: string, onProgress?: ScanProgr
   if (!breach) return;
 
   const vendorRels = getStore().relationships.filter(r => r.sourceCompanyId === breach.companyId);
+  if (vendorRels.length === 0) {
+    onProgress?.('prospect', `no vendor relationships found for ${breach.companyName} — skipping prospect identification`);
+    return;
+  }
+
+  const breachVendorIds = new Set(vendorRels.map(r => r.targetVendorId));
   const targets = await getTargetAccounts();
 
   onProgress?.('prospect', 'cross-referencing blast zone with your target accounts...');
@@ -582,10 +634,50 @@ export async function identifyProspects(breachId: string, onProgress?: ScanProgr
     );
     if (existingProspect) continue;
 
-    const targetVendors = getStore().relationships.filter(r => r.sourceCompanyId === target.id);
-    const sharedVendors = vendorRels.filter(vr =>
-      targetVendors.some(sv => sv.targetVendorId === vr.targetVendorId)
+    const targetCompanyEntry = Array.from(getStore().companies.values()).find(
+      c => c.name.toLowerCase() === target.name.toLowerCase()
     );
+
+    let sharedVendors: typeof vendorRels = [];
+
+    const targetRels = getStore().relationships.filter(r => r.sourceCompanyId === target.id);
+    sharedVendors = vendorRels.filter(vr =>
+      targetRels.some(sv => sv.targetVendorId === vr.targetVendorId)
+    );
+
+    if (sharedVendors.length === 0 && targetCompanyEntry) {
+      const companyRels = getStore().relationships.filter(r => r.sourceCompanyId === targetCompanyEntry.id);
+      sharedVendors = vendorRels.filter(vr =>
+        companyRels.some(sv => sv.targetVendorId === vr.targetVendorId)
+      );
+    }
+
+    if (sharedVendors.length === 0) {
+      const likelyVendors: typeof vendorRels = [];
+      for (const vr of vendorRels) {
+        const vendor = getStore().vendors.get(vr.targetVendorId);
+        if (!vendor) continue;
+        if (isLikelyCustomerOf(target.name, vendor.name)) {
+          likelyVendors.push(vr);
+        }
+      }
+      if (likelyVendors.length > 0) {
+        sharedVendors = likelyVendors;
+        for (const vr of likelyVendors) {
+          const existing = getStore().relationships.find(
+            r => r.sourceCompanyId === target.id && r.targetVendorId === vr.targetVendorId
+          );
+          if (!existing) {
+            addRelationship({
+              sourceCompanyId: target.id,
+              targetVendorId: vr.targetVendorId,
+              confidence: 0.6,
+              discoveredFrom: 'inferred',
+            });
+          }
+        }
+      }
+    }
 
     if (sharedVendors.length === 0) continue;
 

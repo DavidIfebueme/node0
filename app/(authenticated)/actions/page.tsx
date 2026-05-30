@@ -20,6 +20,7 @@ export default function ActionsPage() {
   const [copied, setCopied] = useState(false);
   const [pushingToPipedrive, setPushingToPipedrive] = useState(false);
   const [pushResult, setPushResult] = useState<string | null>(null);
+  const [selectedForPush, setSelectedForPush] = useState<Set<string>>(new Set());
 
   const cacheKey = selectedProspect ? `${selectedProspect.id}-${tone}` : '';
   const cached = cacheKey ? savedOutreach[cacheKey] : null;
@@ -82,11 +83,14 @@ export default function ActionsPage() {
   };
 
   const handlePushToPipedrive = async () => {
-    if (prospects.length === 0) return;
+    const targetProspects = selectedForPush.size > 0
+      ? prospects.filter(p => selectedForPush.has(p.id))
+      : prospects;
+    if (targetProspects.length === 0) return;
     setPushingToPipedrive(true);
     setPushResult(null);
     try {
-      const payload = prospects.map(p => ({
+      const payload = targetProspects.map(p => ({
         companyName: p.companyName,
         industry: p.industry,
         priority: p.priority,
@@ -100,8 +104,9 @@ export default function ActionsPage() {
       });
       const data = await res.json();
       if (data.results) {
-        const synced = data.results.filter((r: { status: string }) => r.status === 'synced').length;
-        setPushResult(`${synced}/${data.results.length} pushed to pipedrive`);
+        const synced = data.results.filter((r: { status: string }) => r.status === 'syncd').length;
+        const failed = data.results.filter((r: { status: string }) => r.status !== 'synced').length;
+        setPushResult(failed > 0 ? `${synced}/${data.results.length} pushed, ${failed} failed` : `${synced} pushed to pipedrive`);
       } else {
         setPushResult(data.error || 'push failed');
       }
@@ -144,7 +149,7 @@ export default function ActionsPage() {
               className="text-xs px-2 py-1"
             >
               {pushingToPipedrive ? <Loader2 size={12} className="animate-spin" /> : <ArrowUpFromLine size={12} />}
-              {pushingToPipedrive ? 'pushing...' : 'push to pipedrive'}
+              {pushingToPipedrive ? 'pushing...' : selectedForPush.size > 0 ? `push ${selectedForPush.size} to pipedrive` : 'push all to pipedrive'}
             </TerminalButton>
             <span className="text-text-primary px-2 py-1 bg-bg-elevated">{prospects.length} total</span>
           </div>
@@ -158,6 +163,20 @@ export default function ActionsPage() {
           ) : (
             <div className="min-w-[500px]">
               <div className="flex text-left text-sm border-b border-border-muted text-text-secondary">
+                <div className="py-3 px-2 font-normal w-8">
+                  <input
+                    type="checkbox"
+                    checked={selectedForPush.size === prospects.length && prospects.length > 0}
+                    onChange={() => {
+                      if (selectedForPush.size === prospects.length) {
+                        setSelectedForPush(new Set());
+                      } else {
+                        setSelectedForPush(new Set(prospects.map(p => p.id)));
+                      }
+                    }}
+                    className="accent-accent-cyan"
+                  />
+                </div>
                 <div className="py-3 px-2 font-normal flex-1">company</div>
                 <div className="py-3 px-2 font-normal w-24">industry</div>
                 <div className="py-3 px-2 font-normal w-28">relevance</div>
@@ -174,13 +193,27 @@ export default function ActionsPage() {
                   {group.prospects.map(prospect => (
                     <div
                       key={prospect.id}
-                      onClick={() => handleSelectProspect(prospect.id)}
                       className={cn(
                         "flex items-center border-b border-border-muted cursor-pointer hover:bg-bg-elevated transition-colors text-sm",
                         (selectedProspect?.id === prospect.id) && "bg-bg-elevated border-l-2 border-l-accent-cyan"
                       )}
                     >
-                      <div className="py-4 px-2 flex-1">
+                      <div className="py-4 px-2 w-8" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedForPush.has(prospect.id)}
+                          onChange={() => {
+                            setSelectedForPush(prev => {
+                              const next = new Set(prev);
+                              if (next.has(prospect.id)) next.delete(prospect.id);
+                              else next.add(prospect.id);
+                              return next;
+                            });
+                          }}
+                          className="accent-accent-cyan"
+                        />
+                      </div>
+                      <div className="py-4 px-2 flex-1" onClick={() => handleSelectProspect(prospect.id)}>
                         <div className="font-bold text-text-primary">{prospect.companyName}</div>
                         <div className="text-[10px] text-text-dim">[{prospect.priority}]</div>
                       </div>

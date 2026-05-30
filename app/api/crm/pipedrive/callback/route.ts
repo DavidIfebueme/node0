@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getTurso, initDb } from '@/lib/turso';
+import { encryptToken } from '@/lib/pipedrive';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +55,10 @@ export async function GET(req: NextRequest) {
     await initDb();
     const turso = getTurso();
 
+    const encAccess = encryptToken(access_token);
+    const encRefresh = encryptToken(refresh_token);
+    const expiresAt = Math.floor(Date.now() / 1000) + expires_in;
+
     const existing = await turso.execute({
       sql: "SELECT id FROM pipedrive_tokens WHERE user_id = ?",
       args: [userId],
@@ -62,12 +67,12 @@ export async function GET(req: NextRequest) {
     if (existing.rows.length > 0) {
       await turso.execute({
         sql: "UPDATE pipedrive_tokens SET access_token = ?, refresh_token = ?, expires_at = ?, api_domain = ? WHERE user_id = ?",
-        args: [access_token, refresh_token, Math.floor(Date.now() / 1000) + expires_in, api_domain || null, userId],
+        args: [encAccess, encRefresh, expiresAt, api_domain || null, userId],
       });
     } else {
       await turso.execute({
         sql: "INSERT INTO pipedrive_tokens (id, user_id, access_token, refresh_token, expires_at, api_domain) VALUES (?, ?, ?, ?, ?, ?)",
-        args: [`pd-${Date.now()}`, userId, access_token, refresh_token, Math.floor(Date.now() / 1000) + expires_in, api_domain || null],
+        args: [`pd-${Date.now()}`, userId, encAccess, encRefresh, expiresAt, api_domain || null],
       });
     }
 

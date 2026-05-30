@@ -290,7 +290,7 @@ export async function scanForBreachRelevance(onProgress?: ScanProgressCallback, 
   for (const result of aiResults) {
     if (result.status !== 'fulfilled') continue;
     const { item, companyName: regexName, extraction, aiSuccess } = result.value;
-    const companyName = extraction?.companyName && extraction.companyName !== 'Unknown' ? extraction.companyName : regexName;
+    const companyName = (extraction?.companyName && extraction.companyName !== 'Unknown' && /^[A-Z]/.test(extraction.companyName) && extraction.companyName.length >= 3) ? extraction.companyName : regexName;
     const breachDescription = (aiSuccess && extraction?.description) ? extraction.description : item.description;
     if (isReportNotBreach(item.title, breachDescription)) {
       onProgress?.('detect', `skipped: ${companyName} (report/research, not a breach)`);

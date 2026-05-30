@@ -120,12 +120,12 @@ Return ONLY a JSON object with "subject" and "body" fields.`;
 
 export async function extractBreachData(articleText: string): Promise<BreachExtraction> {
   const systemPrompt = `You are a cybersecurity intelligence analyst. Extract structured breach data from the given article text. Return a JSON object with exactly these fields:
-- companyName: the company that was breached
-- breachType: type of breach (e.g. DATA_EXFILTRATION, RANSOMWARE, SUPPLY_CHAIN, CREDENTIAL_THEFT, ZERO_DAY, INSIDER_THREAT, MISCONFIGURATION)
-- severity: one of CRITICAL, HIGH, MEDIUM, LOW
-- description: 1-2 sentence summary of what happened
-- affectedVendors: array of vendor/product names that are involved or affected (e.g. cloud providers, SaaS tools, security tools mentioned)
-- affectedCompanies: array of company names mentioned as affected
+- companyName: the specific company that was breached (proper name, e.g. "Snowflake", "Okta"). Never return generic words like "top", "mobile", "various", "multiple".
+- breachType: MUST be exactly one of: RANSOMWARE, CREDENTIAL_THEFT, SUPPLY_CHAIN, DATA_EXFILTRATION, ZERO_DAY, INSIDER_THREAT, MISCONFIGURATION, DATA_LEAK, VULNERABILITY, CREDENTIAL_EXPOSURE, THIRD_PARTY
+- severity: MUST be exactly one of: CRITICAL, HIGH, MEDIUM, LOW
+- description: 1-2 sentence factual summary of what happened
+- affectedVendors: array of specific vendor/product names involved (e.g. ["AWS", "Okta", "Salesforce"]). Use empty array if none found.
+- affectedCompanies: array of specific company names affected. Use empty array if none found.
 
 No markdown, no code fences, just raw JSON.`;
 
@@ -143,13 +143,23 @@ No markdown, no code fences, just raw JSON.`;
   try {
     const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed = JSON.parse(cleaned);
+    const rawVendors = parsed.affectedVendors;
+    const vendorList = Array.isArray(rawVendors) ? rawVendors : (typeof rawVendors === 'string' && rawVendors ? rawVendors.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
+    const rawCompanies = parsed.affectedCompanies;
+    const companyList = Array.isArray(rawCompanies) ? rawCompanies : (typeof rawCompanies === 'string' && rawCompanies ? rawCompanies.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
+    const rawSeverity = String(parsed.severity || 'MEDIUM').toUpperCase().trim();
+    const validSeverities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+    const severity = validSeverities.includes(rawSeverity) ? rawSeverity : 'MEDIUM';
+    const rawBreachType = String(parsed.breachType || 'DATA_LEAK').toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z_]/g, '');
+    const validBreachTypes = ['RANSOMWARE', 'CREDENTIAL_EXPOSURE', 'VULNERABILITY', 'THIRD_PARTY', 'INSIDER_THREAT', 'DATA_LEAK', 'DATA_EXFILTRATION', 'SUPPLY_CHAIN', 'ZERO_DAY', 'MISCONFIGURATION', 'CREDENTIAL_THEFT'];
+    const breachType = validBreachTypes.includes(rawBreachType) ? rawBreachType : 'DATA_LEAK';
     return {
       companyName: parsed.companyName || 'Unknown',
-      breachType: parsed.breachType || 'DATA_EXFILTRATION',
-      severity: parsed.severity || 'MEDIUM',
+      breachType,
+      severity,
       description: parsed.description || '',
-      affectedVendors: Array.isArray(parsed.affectedVendors) ? parsed.affectedVendors : [],
-      affectedCompanies: Array.isArray(parsed.affectedCompanies) ? parsed.affectedCompanies : [],
+      affectedVendors: vendorList,
+      affectedCompanies: companyList,
     };
   } catch (err) {
     console.error('extractBreachData JSON parse failed:', err instanceof Error ? err.message : err, '\nRaw content:', content.slice(0, 300));

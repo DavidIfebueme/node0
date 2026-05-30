@@ -92,8 +92,6 @@ export default function Dashboard() {
                 if (data.prospects) {
                   addProspects(data.prospects as Prospect[]);
                 }
-              } else if (currentEvent === 'complete') {
-                if (data.progress) setScanProgress(data.progress);
               } else if (currentEvent === 'error') {
                 const msg = data.message || 'scan failed';
                 log(`✕ ${msg}`);

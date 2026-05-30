@@ -44,18 +44,6 @@ export async function initDb() {
   `);
 
   await turso.execute(`
-    CREATE TABLE IF NOT EXISTS hubspot_tokens (
-      id TEXT PRIMARY KEY,
-      user_id TEXT UNIQUE NOT NULL,
-      access_token TEXT NOT NULL,
-      refresh_token TEXT NOT NULL,
-      expires_at INTEGER NOT NULL,
-      hub_id INTEGER,
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    )
-  `);
-
-  await turso.execute(`
     CREATE TABLE IF NOT EXISTS pipedrive_tokens (
       id TEXT PRIMARY KEY,
       user_id TEXT UNIQUE NOT NULL,

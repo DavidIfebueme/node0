@@ -1,4 +1,4 @@
-import type { Breach, Company, Vendor, VendorRelationship, Prospect, OutreachMessage } from './types';
+import type { Breach, Company, Vendor, VendorRelationship, Prospect } from './types';
 import { getTurso, initDb } from './turso';
 
 export interface UserProfile {
@@ -25,7 +25,6 @@ interface Store {
   vendors: Map<string, Vendor>;
   relationships: VendorRelationship[];
   prospects: Prospect[];
-  outreach: OutreachMessage[];
   scans: ScanResult[];
   lastScanAt: string | null;
 }
@@ -37,7 +36,6 @@ const store: Store = {
   vendors: new Map(),
   relationships: [],
   prospects: [],
-  outreach: [],
   scans: [],
   lastScanAt: null,
 };
@@ -84,17 +82,6 @@ export async function getProfile(): Promise<UserProfile> {
   return store.profile;
 }
 
-export async function updateProfile(profile: Partial<UserProfile>) {
-  store.profile = { ...await getProfile(), ...profile };
-  try {
-    await initDb();
-    await getTurso().execute({
-      sql: "UPDATE users SET company_name = ?, industry = ?, domain = ? WHERE id = ?",
-      args: [store.profile.companyName, store.profile.industry, store.profile.domain, store.profile.userId],
-    });
-  } catch {}
-}
-
 export async function getTargetAccounts(): Promise<Company[]> {
   try {
     await initDb();
@@ -114,27 +101,8 @@ export async function getTargetAccounts(): Promise<Company[]> {
   return [];
 }
 
-export async function addTargetAccount(company: Company) {
-  store.companies.set(company.id, company);
-  try {
-    await initDb();
-    await getTurso().execute({
-      sql: "INSERT OR IGNORE INTO target_accounts (id, user_id, name, domain, industry, source) VALUES (?, ?, ?, ?, ?, 'manual')",
-      args: [company.id, store.profile?.userId || '', company.name, company.domain, company.industry],
-    });
-  } catch {}
-}
-
 export function addBreach(breach: Breach) {
   store.breaches.set(breach.id, breach);
-}
-
-export function addCompany(company: Company) {
-  store.companies.set(company.id, company);
-}
-
-export function addVendor(vendor: Vendor) {
-  store.vendors.set(vendor.id, vendor);
 }
 
 export function addRelationship(rel: VendorRelationship) {
@@ -148,10 +116,6 @@ export function addProspect(prospect: Prospect) {
   if (!existing) {
     store.prospects.push(prospect);
   }
-}
-
-export function addOutreach(message: OutreachMessage) {
-  store.outreach.push(message);
 }
 
 export function getOrCreateCompany(name: string, domain: string, industry: string): Company {
@@ -190,63 +154,6 @@ export function completeScan(scanId: string, stats: Partial<ScanResult>) {
     Object.assign(scan, stats, { completedAt: new Date().toISOString(), status: 'completed' as const });
   }
   store.lastScanAt = new Date().toISOString();
-}
-
-export function getAllBreaches(): Breach[] {
-  return Array.from(store.breaches.values()).sort(
-    (a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime()
-  );
-}
-
-export function getBreachById(id: string): Breach | undefined {
-  return store.breaches.get(id);
-}
-
-export function getVendorsForCompany(companyId: string): { vendor: Vendor; relationship: VendorRelationship }[] {
-  return store.relationships
-    .filter(r => r.sourceCompanyId === companyId)
-    .map(r => ({
-      vendor: store.vendors.get(r.targetVendorId)!,
-      relationship: r,
-    }))
-    .filter(v => v.vendor);
-}
-
-export function getCompaniesUsingVendor(vendorId: string): { company: Company; relationship: VendorRelationship }[] {
-  return store.relationships
-    .filter(r => r.targetVendorId === vendorId)
-    .map(r => ({
-      company: store.companies.get(r.sourceCompanyId)!,
-      relationship: r,
-    }))
-    .filter(c => c.company);
-}
-
-export function getProspectsForBreach(breachId: string): Prospect[] {
-  return store.prospects.filter(p => p.breachId === breachId);
-}
-
-export function getAllProspects(): Prospect[] {
-  return store.prospects.sort((a, b) => b.relevanceScore - a.relevanceScore);
-}
-
-export function getProspectById(id: string): Prospect | undefined {
-  return store.prospects.find(p => p.id === id);
-}
-
-export function getOutreachForProspect(prospectId: string): OutreachMessage | undefined {
-  return store.outreach.find(m => m.prospectId === prospectId);
-}
-
-export function resetStore() {
-  store.breaches.clear();
-  store.companies.clear();
-  store.vendors.clear();
-  store.relationships = [];
-  store.prospects = [];
-  store.outreach = [];
-  store.scans = [];
-  store.lastScanAt = null;
 }
 
 export async function saveScanState() {

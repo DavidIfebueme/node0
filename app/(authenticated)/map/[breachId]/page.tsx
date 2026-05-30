@@ -2,7 +2,6 @@
 
 import React, { use, useEffect, useState } from 'react';
 import { useStore } from '@/lib/store';
-import { getGraphData } from '@/lib/api';
 import { GlitchText } from '@/components/ui/glitch-text';
 import { TerminalButton } from '@/components/ui/terminal-button';
 import { ArrowLeft } from 'lucide-react';

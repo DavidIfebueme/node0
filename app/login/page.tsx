@@ -100,9 +100,6 @@ export default function LoginPage() {
           no account? <Link href="/signup" className="text-accent-cyan hover:underline">create one</Link>
         </div>
 
-        <div className="mt-6 text-center text-[10px] text-text-dim font-mono">
-          demo: demo@node0.io / node0demo
-        </div>
       </div>
     </div>
   );

@@ -18,11 +18,23 @@ async function getValidToken(userId: string): Promise<{ accessToken: string; api
     const expiresAt = row.expires_at as number;
     if (expiresAt < Math.floor(Date.now() / 1000)) return null;
 
+    let apiDomain = row.api_domain as string;
+    if (!apiDomain || !apiDomain.includes('pipedrive.com')) {
+      const meRes = await fetch('https://api.pipedrive.com/v1/users/me', {
+        headers: { 'Authorization': `Bearer ${row.access_token}` },
+      });
+      const meData = await meRes.json();
+      apiDomain = meData?.data?.company_domain
+        ? `https://${meData.data.company_domain}.pipedrive.com`
+        : 'https://api.pipedrive.com';
+    }
+
     return {
       accessToken: row.access_token as string,
-      apiDomain: (row.api_domain as string) || 'https://api.pipedrive.com',
+      apiDomain: apiDomain.replace(/\/$/, ''),
     };
-  } catch {
+  } catch (err) {
+    console.error('getValidToken error:', err);
     return null;
   }
 }
@@ -46,34 +58,43 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'no prospects provided' }, { status: 400 });
   }
 
-  const baseUrl = tokens.apiDomain.replace(/\/$/, '');
+  const baseUrl = tokens.apiDomain;
   const headers: Record<string, string> = {
     'Authorization': `Bearer ${tokens.accessToken}`,
     'Content-Type': 'application/json',
   };
 
-  const results: Array<{ company: string; status: string }> = [];
+  console.log(`pipedrive sync: pushing ${prospects.length} prospects to ${baseUrl}`);
+
+  const results: Array<{ company: string; status: string; detail?: string }> = [];
 
   for (const prospect of prospects.slice(0, 20)) {
     try {
+      const orgPayload: Record<string, unknown> = { name: prospect.companyName };
+      if (prospect.industry) orgPayload.industry = prospect.industry;
+
       const orgRes = await fetch(`${baseUrl}/api/v1/organizations`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          name: prospect.companyName,
-          ...(prospect.industry ? { [await getOrgFieldId(baseUrl, headers, 'industry')]: prospect.industry } : {}),
-        }),
+        body: JSON.stringify(orgPayload),
       });
 
       const orgData = await orgRes.json();
-      const orgId = orgData?.data?.id;
 
-      if (!orgId) {
-        results.push({ company: prospect.companyName, status: 'org_create_failed' });
+      if (!orgRes.ok || !orgData?.success) {
+        const errMsg = orgData?.error || orgData?.error_info?.message || `HTTP ${orgRes.status}`;
+        console.error(`pipedrive org create failed for ${prospect.companyName}:`, errMsg, JSON.stringify(orgData));
+        results.push({ company: prospect.companyName, status: 'org_create_failed', detail: errMsg });
         continue;
       }
 
-      await fetch(`${baseUrl}/api/v1/deals`, {
+      const orgId = orgData.data?.id;
+      if (!orgId) {
+        results.push({ company: prospect.companyName, status: 'org_create_failed', detail: 'no org id returned' });
+        continue;
+      }
+
+      const dealRes = await fetch(`${baseUrl}/api/v1/deals`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -84,27 +105,17 @@ export async function POST(req: NextRequest) {
         }),
       });
 
+      if (!dealRes.ok) {
+        const dealErr = await dealRes.text();
+        console.error(`pipedrive deal create failed for ${prospect.companyName}:`, dealErr);
+      }
+
       results.push({ company: prospect.companyName, status: 'synced' });
-    } catch {
+    } catch (err) {
+      console.error(`pipedrive sync error for ${prospect.companyName}:`, err);
       results.push({ company: prospect.companyName, status: 'error' });
     }
   }
 
   return NextResponse.json({ results });
-}
-
-let orgFieldCache: Record<string, string> = {};
-
-async function getOrgFieldId(baseUrl: string, headers: Record<string, string>, fieldKey: string): Promise<string> {
-  if (orgFieldCache[fieldKey]) return orgFieldCache[fieldKey];
-  try {
-    const res = await fetch(`${baseUrl}/api/v1/organizationFields`, { headers });
-    const data = await res.json();
-    const field = data?.data?.find((f: { key: string }) => f.key === fieldKey);
-    if (field?.id) {
-      orgFieldCache[fieldKey] = String(field.id);
-      return String(field.id);
-    }
-  } catch {}
-  return fieldKey;
 }

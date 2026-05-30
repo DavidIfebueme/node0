@@ -72,6 +72,8 @@ function cleanExtractedName(raw: string): string | null {
   if (/^[a-z]/.test(name)) return null;
   if (/\d{4}/.test(name)) return null;
   if (/^(and|or|the|a|an|of|in|on|at|to|for|with|by|from|up|into|through)\b/i.test(name)) return null;
+  if (/_/.test(name)) return null;
+  if (/^(not|no|none|unknown|unspecified|various|multiple|several|many|some)\b/i.test(name)) return null;
   return name;
 }
 
@@ -276,8 +278,10 @@ export async function scanForBreachRelevance(onProgress?: ScanProgressCallback, 
       try {
         const articleText = `TITLE: ${item.title}\n\n${item.description}`;
         const extraction = await extractBreachData(articleText);
+        console.log(`[AI] extraction for ${companyName}:`, JSON.stringify(extraction).slice(0, 200));
         return { item, companyName, extraction, aiSuccess: true };
-      } catch {
+      } catch (err) {
+        console.error(`[AI] extraction failed for ${companyName}:`, err instanceof Error ? err.message : err);
         return { item, companyName, extraction: null, aiSuccess: false };
       }
     })

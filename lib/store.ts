@@ -15,6 +15,7 @@ interface NodeStore {
   setLastScanAt: (time: string) => void;
   addBreach: (breach: Breach) => void;
   addProspects: (prospects: Prospect[]) => void;
+  removeBreach: (breachId: string) => Promise<void>;
   saveOutreach: (key: string, content: { subject: string; body: string }) => void;
   loadSavedState: () => Promise<void>;
 }
@@ -37,6 +38,19 @@ export const useStore = create<NodeStore>((set) => ({
     const unique = newProspects.filter(p => !existingIds.has(p.id));
     return { prospects: [...state.prospects, ...unique] };
   }),
+  removeBreach: async (breachId) => {
+    set((state) => ({
+      breaches: state.breaches.filter(b => b.id !== breachId),
+      prospects: state.prospects.filter(p => p.breachId !== breachId),
+    }));
+    try {
+      const res = await fetch(`/api/scan/breach?id=${breachId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.breaches) {
+        set({ breaches: data.breaches, prospects: data.prospects || [] });
+      }
+    } catch {}
+  },
   saveOutreach: (key, content) => set((state) => ({
     savedOutreach: { ...state.savedOutreach, [key]: content },
   })),

@@ -1,12 +1,14 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Breach } from '@/lib/types';
 import { format } from 'date-fns';
 import { formatDistanceToNow } from 'date-fns';
 import { motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { useStore } from '@/lib/store';
+import { X } from 'lucide-react';
 
 const SEVERITY_SYMBOL: Record<string, { symbol: string; color: string }> = {
   CRITICAL: { symbol: '▲', color: 'text-accent-red' },
@@ -17,11 +19,23 @@ const SEVERITY_SYMBOL: Record<string, { symbol: string; color: string }> = {
 
 export function BreachCard({ breach, index }: { breach: Breach; index: number }) {
   const router = useRouter();
+  const removeBreach = useStore(s => s.removeBreach);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const sev = SEVERITY_SYMBOL[breach.severity] || SEVERITY_SYMBOL.LOW;
   const dateValue = breach.detectedAt ? new Date(breach.detectedAt) : new Date();
   const isValidDate = !isNaN(dateValue.getTime());
   const timestamp = isValidDate ? format(dateValue, 'HH:mm:ss') : '--:--:--';
   const timeAgo = isValidDate ? formatDistanceToNow(dateValue) : 'just now';
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      setTimeout(() => setConfirmDelete(false), 3000);
+      return;
+    }
+    removeBreach(breach.id);
+  };
 
   return (
     <motion.div
@@ -49,9 +63,18 @@ export function BreachCard({ breach, index }: { breach: Breach; index: number })
             <span>{timeAgo} ago</span>
           </div>
         </div>
-        <span className="text-accent-cyan text-xs opacity-0 group-hover:opacity-100 transition-opacity shrink-0 pt-1">
-          → trace
-        </span>
+        <div className="flex items-center gap-1 shrink-0 pt-1">
+          <button
+            onClick={handleDelete}
+            className={`text-xs px-1.5 py-0.5 border transition-colors ${confirmDelete ? 'border-accent-red text-accent-red bg-accent-red/10' : 'border-transparent text-text-dim opacity-0 group-hover:opacity-100 hover:border-border-default hover:text-accent-red'}`}
+            title={confirmDelete ? 'click again to confirm' : 'remove breach'}
+          >
+            <X size={12} />
+          </button>
+          <span className="text-accent-cyan text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+            → trace
+          </span>
+        </div>
       </div>
     </motion.div>
   );

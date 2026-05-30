@@ -151,7 +151,8 @@ No markdown, no code fences, just raw JSON.`;
       affectedVendors: Array.isArray(parsed.affectedVendors) ? parsed.affectedVendors : [],
       affectedCompanies: Array.isArray(parsed.affectedCompanies) ? parsed.affectedCompanies : [],
     };
-  } catch {
+  } catch (err) {
+    console.error('extractBreachData JSON parse failed:', err instanceof Error ? err.message : err, '\nRaw content:', content.slice(0, 300));
     return {
       companyName: 'Unknown',
       breachType: 'DATA_EXFILTRATION',

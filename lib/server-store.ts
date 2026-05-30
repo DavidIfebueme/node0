@@ -126,6 +126,22 @@ export function addProspect(prospect: Prospect) {
   }
 }
 
+export function removeBreach(breachId: string) {
+  const breach = store.breaches.get(breachId);
+  if (!breach) return;
+  store.relationships = store.relationships.filter(r => r.sourceCompanyId !== breach.companyId);
+  store.prospects = store.prospects.filter(p => p.breachId !== breachId);
+  store.breaches.delete(breachId);
+  const usedCompanyIds = new Set(Array.from(store.breaches.values()).map(b => b.companyId));
+  const usedVendorIds = new Set(store.relationships.map(r => r.targetVendorId));
+  for (const [id] of store.companies) {
+    if (!usedCompanyIds.has(id)) store.companies.delete(id);
+  }
+  for (const [id] of store.vendors) {
+    if (!usedVendorIds.has(id)) store.vendors.delete(id);
+  }
+}
+
 export function getOrCreateCompany(name: string, domain: string, industry: string): Company {
   const existing = Array.from(store.companies.values()).find(c => c.name.toLowerCase() === name.toLowerCase());
   if (existing) return existing;

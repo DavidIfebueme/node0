@@ -16,6 +16,7 @@ interface NodeStore {
   addBreach: (breach: Breach) => void;
   addProspects: (prospects: Prospect[]) => void;
   saveOutreach: (key: string, content: { subject: string; body: string }) => void;
+  loadSavedState: () => Promise<void>;
 }
 
 export const useStore = create<NodeStore>((set) => ({
@@ -39,4 +40,17 @@ export const useStore = create<NodeStore>((set) => ({
   saveOutreach: (key, content) => set((state) => ({
     savedOutreach: { ...state.savedOutreach, [key]: content },
   })),
+  loadSavedState: async () => {
+    try {
+      const res = await fetch('/api/scan/state');
+      const data = await res.json();
+      if (data.breaches?.length > 0 || data.prospects?.length > 0) {
+        set({
+          breaches: data.breaches,
+          prospects: data.prospects,
+          lastScanAt: new Date().toISOString(),
+        });
+      }
+    } catch {}
+  },
 }));

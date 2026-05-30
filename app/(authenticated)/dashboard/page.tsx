@@ -12,7 +12,7 @@ import type { Breach, Prospect } from '@/lib/types';
 export default function Dashboard() {
   const [filter, setFilter] = useState('all');
   const [scanLog, setScanLog] = useState<string[]>([]);
-  const { isScanning, setScanning, scanProgress, setScanProgress, breaches, prospects, addBreach, addProspects, setLastScanAt } = useStore();
+  const { isScanning, setScanning, scanProgress, setScanProgress, breaches, prospects, addBreach, addProspects, setLastScanAt, loadSavedState } = useStore();
   const [targetCount, setTargetCount] = useState(0);
   const [scanHistory, setScanHistory] = useState<Array<{
     id: string; status: string; breachesFound: number; vendorsMapped: number;
@@ -28,6 +28,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (isScanning) setScanning(false);
+    loadSavedState();
     fetch('/api/profile').then(r => r.json()).then(d => {
       setTargetCount(d.targetCount || 0);
       if (d.targets) setAvailableTargets(d.targets.map((t: { id: string; name: string }) => ({ id: t.id, name: t.name })));

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { scanForBreachRelevance, mapVendorNetwork, findCompaniesUsingVendor, identifyProspects, enrichCompanyWithLinkedIn } from '@/lib/brightdata';
-import { getStore, startScan, completeScan, getProfile, getTargetAccounts, setCurrentUserId } from '@/lib/server-store';
+import { getStore, startScan, completeScan, getProfile, getTargetAccounts, setCurrentUserId, saveScanState, loadScanState } from '@/lib/server-store';
 import type { Breach } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -243,6 +243,10 @@ export async function POST(req: NextRequest) {
                 args: [scanId, userId, breaches.length, totalVendors, totalProspects, scanStartedAt, new Date().toISOString()],
               });
             }
+          } catch {}
+
+          try {
+            await saveScanState();
           } catch {}
 
           send('progress', { message: `scan complete — ${allBreaches.length} breaches, ${finalStore.vendors.size} vendors, ${finalStore.prospects.length} prospects`, progress: 100 });

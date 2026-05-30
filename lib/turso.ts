@@ -95,6 +95,15 @@ export async function initDb() {
     )
   `);
 
+  await turso.execute(`
+    CREATE TABLE IF NOT EXISTS scan_state (
+      user_id TEXT PRIMARY KEY,
+      data TEXT NOT NULL,
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+  `);
+
   const existing = await turso.execute("SELECT id FROM users WHERE email = 'demo@node0.io'");
   if (existing.rows.length === 0) {
     await turso.execute({

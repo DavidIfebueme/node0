@@ -240,12 +240,58 @@ export function getOutreachForProspect(prospectId: string): OutreachMessage | un
 
 export function resetStore() {
   store.breaches.clear();
+  store.companies.clear();
   store.vendors.clear();
   store.relationships = [];
   store.prospects = [];
   store.outreach = [];
   store.scans = [];
   store.lastScanAt = null;
+}
+
+export async function saveScanState() {
+  if (!store.profile?.userId) return;
+  try {
+    await initDb();
+    const turso = getTurso();
+    const data = JSON.stringify({
+      breaches: Array.from(store.breaches.entries()),
+      companies: Array.from(store.companies.entries()),
+      vendors: Array.from(store.vendors.entries()),
+      relationships: store.relationships,
+      prospects: store.prospects,
+    });
+    await turso.execute({
+      sql: "INSERT OR REPLACE INTO scan_state (user_id, data, updated_at) VALUES (?, ?, datetime('now'))",
+      args: [store.profile.userId, data],
+    });
+  } catch (err) {
+    console.error('saveScanState error:', err);
+  }
+}
+
+export async function loadScanState(): Promise<boolean> {
+  if (!store.profile?.userId) return false;
+  try {
+    await initDb();
+    const turso = getTurso();
+    const result = await turso.execute({
+      sql: "SELECT data FROM scan_state WHERE user_id = ?",
+      args: [store.profile.userId],
+    });
+    if (result.rows.length === 0) return false;
+
+    const parsed = JSON.parse(result.rows[0].data as string);
+    if (parsed.breaches) store.breaches = new Map(parsed.breaches);
+    if (parsed.companies) store.companies = new Map(parsed.companies);
+    if (parsed.vendors) store.vendors = new Map(parsed.vendors);
+    if (parsed.relationships) store.relationships = parsed.relationships;
+    if (parsed.prospects) store.prospects = parsed.prospects;
+    return true;
+  } catch (err) {
+    console.error('loadScanState error:', err);
+    return false;
+  }
 }
 
 export function getGraphData(breachId: string) {

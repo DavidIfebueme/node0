@@ -1,56 +1,9 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getTurso, initDb } from '@/lib/turso';
+import { getValidPipedriveToken } from '@/lib/pipedrive';
 
 export const dynamic = 'force-dynamic';
-
-const SEED_ORGS = [
-  { name: 'Stripe', industry: 'Fintech' },
-  { name: 'Shopify', industry: 'E-Commerce' },
-  { name: 'Slack', industry: 'SaaS' },
-  { name: 'Datadog', industry: 'Observability' },
-  { name: 'Snowflake', industry: 'Data Warehouse' },
-  { name: 'CrowdStrike', industry: 'Cybersecurity' },
-  { name: 'Twilio', industry: 'Communications' },
-  { name: 'Okta', industry: 'Identity' },
-  { name: 'Atlassian', industry: 'Collaboration' },
-  { name: 'Salesforce', industry: 'CRM' },
-];
-
-async function getValidToken(userId: string): Promise<{ accessToken: string; apiDomain: string } | null> {
-  try {
-    await initDb();
-    const turso = getTurso();
-    const result = await turso.execute({
-      sql: "SELECT access_token, refresh_token, expires_at, api_domain FROM pipedrive_tokens WHERE user_id = ?",
-      args: [userId],
-    });
-    if (result.rows.length === 0) return null;
-
-    const row = result.rows[0];
-    const expiresAt = row.expires_at as number;
-    if (expiresAt < Math.floor(Date.now() / 1000)) return null;
-
-    let apiDomain = row.api_domain as string;
-    if (!apiDomain || !apiDomain.includes('pipedrive.com')) {
-      const meRes = await fetch('https://api.pipedrive.com/v1/users/me', {
-        headers: { 'Authorization': `Bearer ${row.access_token}` },
-      });
-      const meData = await meRes.json();
-      apiDomain = meData?.data?.company_domain
-        ? `https://${meData.data.company_domain}.pipedrive.com`
-        : 'https://api.pipedrive.com';
-    }
-
-    return {
-      accessToken: row.access_token as string,
-      apiDomain: apiDomain.replace(/\/$/, ''),
-    };
-  } catch (err) {
-    console.error('getValidToken error:', err);
-    return null;
-  }
-}
 
 export async function GET() {
   const session = await auth();
@@ -59,7 +12,7 @@ export async function GET() {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const tokens = await getValidToken(userId);
+  const tokens = await getValidPipedriveToken(userId);
   if (!tokens) {
     return NextResponse.json({ error: 'pipedrive not connected or token expired' }, { status: 401 });
   }
@@ -94,7 +47,7 @@ export async function POST() {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const tokens = await getValidToken(userId);
+  const tokens = await getValidPipedriveToken(userId);
   if (!tokens) {
     return NextResponse.json({ error: 'pipedrive not connected or token expired' }, { status: 401 });
   }
@@ -139,41 +92,4 @@ export async function POST() {
     console.error('pipedrive import error:', err);
     return NextResponse.json({ error: 'import failed' }, { status: 500 });
   }
-}
-
-export async function PUT() {
-  const session = await auth();
-  const userId = session?.user?.id;
-  if (!userId) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
-
-  const tokens = await getValidToken(userId);
-  if (!tokens) {
-    return NextResponse.json({ error: 'pipedrive not connected or token expired' }, { status: 401 });
-  }
-
-  const headers: Record<string, string> = {
-    'Authorization': `Bearer ${tokens.accessToken}`,
-    'Content-Type': 'application/json',
-  };
-
-  let created = 0;
-
-  for (const org of SEED_ORGS) {
-    try {
-      const res = await fetch(`${tokens.apiDomain}/api/v1/organizations`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ name: org.name, industry: org.industry }),
-      });
-      const data = await res.json();
-      if (res.ok && data?.success) created++;
-      else console.error(`seed org failed for ${org.name}:`, JSON.stringify(data));
-    } catch (err) {
-      console.error(`seed org error for ${org.name}:`, err);
-    }
-  }
-
-  return NextResponse.json({ created, total: SEED_ORGS.length });
 }

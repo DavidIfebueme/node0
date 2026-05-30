@@ -104,7 +104,7 @@ export default function ActionsPage() {
       });
       const data = await res.json();
       if (data.results) {
-        const synced = data.results.filter((r: { status: string }) => r.status === 'syncd').length;
+        const synced = data.results.filter((r: { status: string }) => r.status === 'synced').length;
         const failed = data.results.filter((r: { status: string }) => r.status !== 'synced').length;
         setPushResult(failed > 0 ? `${synced}/${data.results.length} pushed, ${failed} failed` : `${synced} pushed to pipedrive`);
       } else {
